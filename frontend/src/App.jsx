@@ -1,4 +1,3 @@
-```jsx
 import logo from "./assets/dojotcg.png";
 
 function App() {
@@ -68,4 +67,3 @@ function App() {
 }
 
 export default App;
-```
