@@ -87,7 +87,7 @@ function Scan() {
         <div style={{ marginTop: "2rem" }}>
           <h2>Card matched with {result.accuracy}% accuracy.</h2>
             <img
-            src={eval(result.image)}
+            src="../assets/dojobird.png"
             alt={`Image URL: ${result.image}`}
             style={{
                 width: "120px",
