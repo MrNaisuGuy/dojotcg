@@ -14,7 +14,7 @@ function Scan() {
   const [resultImage, setResultImage] = useState(null);
   const [loading, setLoading] = useState(false);
   const [showResult, setShowResult] = useState(false);
-  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [isMobile, setIsMobile] = useState(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
 
   function handleImageUpload(event) {
     setShowResult(false);
