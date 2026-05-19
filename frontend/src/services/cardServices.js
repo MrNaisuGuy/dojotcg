@@ -1,5 +1,3 @@
-
-
 export async function analyzeCard() {
 
   return new Promise((resolve) => {

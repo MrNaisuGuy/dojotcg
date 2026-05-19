@@ -10,19 +10,27 @@ function Scan() {
   const [loading, setLoading] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
-  async function handleImageUpload(event) {
+  function handleImageUpload(event) {
     const file = event.target.files[0];
     
     if (!file) return;
 
     setResult(null);
     setLoading(false);
-    setResultImage(null);
     setFileName(file.name);
 
     const imageUrl = URL.createObjectURL(file);
 
     setSelectedImage(imageUrl);
+
+    // const data = await analyzeCard();
+
+    setResult(data);
+    setLoading(false);
+  }
+
+  async function handleAnalyze() {
+    setLoading(true);
 
     const data = await analyzeCard();
 
@@ -54,7 +62,7 @@ function Scan() {
       
       {selectedImage && (
         <div style={{ marginTop: "2rem" }}>
-          <p>{fileName}</p>
+          <p>Card Preview</p>
 
           <img
             src={selectedImage}
@@ -68,7 +76,7 @@ function Scan() {
           />
 
           <div style={{ marginTop: "1rem" }}>
-            <button onClick={analyzeCard}>Analyze Card</button>
+            <button onClick={handleAnalyze}>Analyze Card</button>
           </div>
         </div>
       )}
