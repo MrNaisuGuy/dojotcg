@@ -37,9 +37,20 @@ function Scan() {
     <main style={{ padding: "2rem", textAlign: "center" }}>
       <h1>Scan Card</h1>
       <p>
-         {isMobile
-         ? "Point your camera at a card to scan it." : "Upload a card image to preview it."
-         }
+         <label
+          htmlFor="card-upload"
+          style={{
+            display: "inline-block",
+            padding: "1rem 2rem",
+            background: "#2563eb",
+            color: "white",
+            borderRadius: "12px",
+            cursor: "pointer",
+            fontWeight: "bold",
+          }}
+         >
+          {isMobile ? "Take a picture of your card to analyze it." : "Upload a card image to analyze it."}
+         </label>
       </p>
 
       <input type="file" accept="image/*" capture={isMobile ? "environment" : undefined} onChange={handleImageUpload} style={{display: "none"}} />
