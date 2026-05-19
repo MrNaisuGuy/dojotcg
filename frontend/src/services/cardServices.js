@@ -27,8 +27,14 @@
 //   return response.json();
 // }
 
-export async function analyzeCard() {
-  const response = await fetch("/api/analyze");
+export async function analyzeCard(cardImage) {
+  const formData = new FormData();
+  formData.append("cardImage", cardImage);
+
+  const response = await fetch("/api/analyze", {
+    method: "POST",
+    body: formData,
+  });
 
   if (!response.ok) {
     throw new Error("Failed to analyze card");

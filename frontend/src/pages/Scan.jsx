@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { analyzeCard } from "../services/cardServices.js";
 import ResultCard from "../components/ResultCard.jsx";
-import dojobird from "../assets/dojobird.png"; // delete later
 import CardCarousel from "../components/CardCarousel.jsx";
 import mtg from "../assets/mtg.png";
 import pokemon from "../assets/pokemon.png";
@@ -9,12 +8,12 @@ import onepiece from "../assets/onepiece.png";
 
 function Scan() {
   const [selectedImage, setSelectedImage] = useState(null);
+  const [selectedFile, setSelectedFile] = useState(null);
   const [fileName, setFileName] = useState("");
   const [result, setResult] = useState(null);
-  const [resultImage, setResultImage] = useState(null);
   const [loading, setLoading] = useState(false);
   const [showResult, setShowResult] = useState(false);
-  const [isMobile, setIsMobile] = useState(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
+  const [isMobile] = useState(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
 
   function handleImageUpload(event) {
     setShowResult(false);
@@ -26,6 +25,7 @@ function Scan() {
     setResult(null);
     setLoading(false);
     setFileName(file.name);
+    setSelectedFile(file);
 
     const imageUrl = URL.createObjectURL(file);
 
@@ -33,11 +33,16 @@ function Scan() {
   }
 
   async function handleAnalyze() {
+    if (!selectedFile) {
+      alert("Please upload a card image first.");
+      return;
+    }
+
     try {
       setLoading(true);
       setShowResult(false);
 
-      const data = await analyzeCard();
+      const data = await analyzeCard(selectedFile);
 
       setResult(data);
       setShowResult(true);
@@ -73,7 +78,7 @@ function Scan() {
       
       {selectedImage && (
         <div style={{ marginTop: "2rem" }}>
-          <p>Card Preview</p>
+          <p>{fileName || "Card Preview"}</p>
 
           <img
             src={selectedImage}
@@ -87,7 +92,9 @@ function Scan() {
           />
 
           <div style={{ marginTop: "1rem" }}>
-            <button onClick={() => { handleAnalyze();}}>Analyze Card</button>
+            <button onClick={handleAnalyze} disabled={loading}>
+              {loading ? "Analyzing..." : "Analyze Card"}
+            </button>
           </div>
         </div>
       )}
