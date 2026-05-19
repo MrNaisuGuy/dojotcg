@@ -17,8 +17,18 @@
 // }
 
 
+// export async function analyzeCard() {
+//   const response = await fetch("http://localhost:3001/api/analyze");
+
+//   if (!response.ok) {
+//     throw new Error("There was an error analyzing the card. Please try again.");
+//   }
+
+//   return response.json();
+// }
+
 export async function analyzeCard() {
-  const response = await fetch("http://localhost:3001/api/analyze");
+  const response = await fetch("/api/analyze");
 
   if (!response.ok) {
     throw new Error("Failed to analyze card");

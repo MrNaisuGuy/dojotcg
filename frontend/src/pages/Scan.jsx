@@ -30,20 +30,23 @@ function Scan() {
     const imageUrl = URL.createObjectURL(file);
 
     setSelectedImage(imageUrl);
-
-    setResult(data);
-    setShowResult(true);
   }
 
   async function handleAnalyze() {
-    setLoading(true);
-    setShowResult(false);
+    try {
+      setLoading(true);
+      setShowResult(false);
 
-    const data = await analyzeCard();
+      const data = await analyzeCard();
 
-    setResult(data);
-    setLoading(false);
-    setShowResult(true);
+      setResult(data);
+      setShowResult(true);
+    } catch (error) {
+      console.error(error);
+      alert("Analyze failed. Check console.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
