@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { analyzeCard } from "../services/cardServices.js";
-import dojobird from "/assets/dojobird.png"; // delete later
+import dojobird from "/src/assets/dojobird.png"; // delete later
 
 function Scan() {
   const [selectedImage, setSelectedImage] = useState(null);
