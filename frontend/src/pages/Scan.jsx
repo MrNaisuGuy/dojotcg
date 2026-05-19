@@ -24,8 +24,6 @@ function Scan() {
 
     setSelectedImage(imageUrl);
 
-    // const data = await analyzeCard();
-
     setResult(data);
     setLoading(false);
   }
@@ -82,7 +80,18 @@ function Scan() {
         </div>
       )}
 
-      {loading && <p>Analyzing card...</p>}
+      {loading && 
+        <div style={{
+                      width: "40px",
+                      height: "40px",
+                      border: "4px solid #ddd",
+                      borderTop: "4px solid #2563eb",
+                      borderRadius: "50%",
+                      margin: "1rem auto",
+                      animation: "spin 1s linear infinite",
+                    }}
+        />
+      }
       <ResultCard result={result} />
       
     </main>
