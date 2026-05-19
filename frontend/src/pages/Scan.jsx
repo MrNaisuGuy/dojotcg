@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { analyzeCard } from "../services/cardServices.js";
-import dojobird from "/src/assets/dojobird.png"; // delete later
+import dojobird from "../assets/dojobird.png"; // delete later
 
 function Scan() {
   const [selectedImage, setSelectedImage] = useState(null);
@@ -87,8 +87,8 @@ function Scan() {
         <div style={{ marginTop: "2rem" }}>
           <h2>Card matched with {result.accuracy}% accuracy.</h2>
             <img
-            src={result.image}
-            alt="DojoTCG"
+            src={eval(result.image)}
+            alt={`Image URL: ${result.image}`}
             style={{
                 width: "120px",
                 borderRadius: "10px",
