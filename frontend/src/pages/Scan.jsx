@@ -49,11 +49,11 @@ function Scan() {
             fontWeight: "bold",
           }}
          >
-          {isMobile ? "Take a picture of your card to analyze it." : "Upload a card image to analyze it."}
+          {isMobile ? "Take a picture of your card." : "Upload a card image to analyze it."}
          </label>
       </p>
 
-      <input type="file" accept="image/*" capture={isMobile ? "environment" : undefined} onChange={handleImageUpload} style={{display: "none"}} />
+      <input type="file" accept="image/*" capture={isMobile ? "environment" : undefined} onChange={handleImageUpload}/>
       
       {selectedImage && (
         <div style={{ marginTop: "2rem" }}>
