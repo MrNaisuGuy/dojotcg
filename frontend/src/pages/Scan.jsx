@@ -96,7 +96,7 @@ function Scan() {
                 marginBottom: "1rem",
             }}
             />
-          <p>Name: {result.name}</p>
+          <p>Card: {result.card}</p>
           <p>Language: {result.language}</p>
           <p>Estimated Price: {result.price}</p>
         </div>
