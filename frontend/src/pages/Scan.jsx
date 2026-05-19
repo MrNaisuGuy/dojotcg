@@ -53,7 +53,7 @@ function Scan() {
          </label>
       </p>
 
-      <input type="file" accept="image/*" capture={isMobile ? "environment" : undefined} onChange={handleImageUpload}/>
+      <input id="card-upload" type="file" accept="image/*" capture={isMobile ? "environment" : undefined} onChange={handleImageUpload} style={{display: "none"}}/>
       
       {selectedImage && (
         <div style={{ marginTop: "2rem" }}>
