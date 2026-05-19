@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { analyzeCard } from "../services/cardServices.js";
+import ResultCard from "../components/ResultCard.jsx";
 import dojobird from "../assets/dojobird.png"; // delete later
 
 function Scan() {
@@ -82,25 +83,8 @@ function Scan() {
       )}
 
       {loading && <p>Analyzing card...</p>}
-
-      {result && (
-        <div style={{ marginTop: "2rem" }}>
-          <h2>Card matched with {result.accuracy}% accuracy.</h2>
-            <img
-            src={dojobird} // change to result.image later}
-            alt={`Image URL: ${result.image}`}
-            style={{
-                width: "120px",
-                borderRadius: "10px",
-                boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
-                marginBottom: "1rem",
-            }}
-            />
-          <p>Card: {result.card}</p>
-          <p>Language: {result.language}</p>
-          <p>Estimated Price: {result.price}</p>
-        </div>
-      )}
+      <ResultCard result={result} />
+      
     </main>
   );
 }
