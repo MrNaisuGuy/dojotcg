@@ -7,6 +7,7 @@ function Scan() {
   const [result, setResult] = useState(null);
   const [resultImage, setResultImage] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
   function handleImageUpload(event) {
     const file = event.target.files[0];
@@ -35,10 +36,14 @@ function Scan() {
   return (
     <main style={{ padding: "2rem", textAlign: "center" }}>
       <h1>Scan Card</h1>
-      <p>Upload a card image to preview it.</p>
+      <p>
+         {isMobile
+         ? "Point your camera at a card to scan it." : "Upload a card image to preview it."
+         }
+      </p>
 
-      <input type="file" accept="image/*" onChange={handleImageUpload} />
-
+      <input type="file" accept="image/*" capture="environment" onChange={handleImageUpload} />
+      
       {selectedImage && (
         <div style={{ marginTop: "2rem" }}>
           <p>{fileName}</p>
