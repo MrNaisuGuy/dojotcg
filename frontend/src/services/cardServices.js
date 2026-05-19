@@ -1,0 +1,19 @@
+
+
+export async function analyzeCard() {
+
+  return new Promise((resolve) => {
+
+    setTimeout(() => {
+        resolve({
+        name: "Dojobird", // live data later
+        language: "Engrish", // live data later
+        price: "$6...7", // live data later
+        accuracy: "0.0001", // live data later
+        image: "../assets/main/cards/dojobird.png", // live data later
+        });
+    }, 1500);
+
+  });
+
+}

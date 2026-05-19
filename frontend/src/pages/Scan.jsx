@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { analyzeCard } from "../services/cardServices.js";
 import dojobird from "../assets/dojobird.png"; // delete later
 
 function Scan() {
@@ -9,28 +10,24 @@ function Scan() {
   const [loading, setLoading] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
-  function handleImageUpload(event) {
+  async function handleImageUpload(event) {
     const file = event.target.files[0];
-
+    
     if (!file) return;
 
+    setResult(null);
+    setLoading(false);
+    setResultImage(null);
     setFileName(file.name);
-    setSelectedImage(URL.createObjectURL(file));
-  }
 
-  function analyzeCard() {
-    setLoading(true);
+    const imageUrl = URL.createObjectURL(file);
 
-    setTimeout(() => {
-      setResult({
-        name: "Dojobird", // live data later
-        language: "Engrish", // live data later
-        price: "$6...7", // live data later
-        accuracy: "0.0001", // live data later
-      });
-      setResultImage(dojobird); // live data later
-      setLoading(false);
-    }, 1500);
+    setSelectedImage(imageUrl);
+
+    const data = await analyzeCard();
+
+    setResult(data);
+    setLoading(false);
   }
 
   return (
@@ -82,7 +79,7 @@ function Scan() {
         <div style={{ marginTop: "2rem" }}>
           <h2>Card matched with {result.accuracy}% accuracy.</h2>
             <img
-            src={resultImage}
+            src={result.image}
             alt="DojoTCG"
             style={{
                 width: "120px",
