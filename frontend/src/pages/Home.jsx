@@ -1,6 +1,11 @@
 import React from "react";
-import logo from "../assets/dojotcg.png";
 import { Link } from "react-router-dom";
+import CardCarousel from "../components/CardCarousel.jsx";
+
+import logo from "../assets/dojotcg.png";
+import mtg from "../assets/mtg.png";
+import pokemon from "../assets/pokemon.png";
+import onepiece from "../assets/onepiece.png";
 
 function Home() {
   return (

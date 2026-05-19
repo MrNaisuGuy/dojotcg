@@ -1,0 +1,92 @@
+.carousel-container {
+  position: relative;
+  width: 300px;
+  height: 420px;
+  margin: 2rem auto;
+  /* perspective: 1000px; */
+  overflow: visible;
+  isolation: isolate;
+}
+
+.carousel-card {
+  position: absolute;
+  width: 220px;
+  left: 50%;
+  top: 50%;
+  border-radius: 16px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+
+  transform: translate(-50%, -50%) scale(0);
+  opacity: 0;
+  visibility: hidden;
+
+  animation: cardCycle 6s infinite;
+  animation-fill-mode: both;
+  transform-style: preserve-3d;
+}
+
+.card-0 {
+  animation-delay: 0s;
+
+  transform:
+    translate(-50%, -50%)
+    translateX(0)
+    scale(1.08);
+
+  opacity: 1;
+  z-index: 3;
+}
+
+.card-1 {
+  animation-delay: -2s;
+
+  transform:
+    translate(-50%, -50%)
+    translateX(90px)
+    scale(0.75);
+
+  opacity: 0.55;
+  z-index: 1;
+}
+
+.card-2 {
+  animation-delay: -4s;
+
+  transform:
+    translate(-50%, -50%)
+    translateX(-90px)
+    scale(0.75);
+
+  opacity: 0.55;
+  z-index: 1;
+}
+
+@keyframes cardCycle {
+  0% {
+    visibility: visible;
+    transform: translate(-50%, -50%) translateX(0) scale(1.08);
+    opacity: 1;
+    z-index: 3;
+  }
+
+  33% {
+    visibility: visible;
+    transform: translate(-50%, -50%) translateX(90px) scale(0.75);
+    opacity: 0.55;
+    z-index: 1;
+  }
+
+  66% {
+    visibility: visible;
+    transform: translate(-50%, -50%) translateX(-90px) scale(0.75);
+    opacity: 0.55;
+    z-index: 1;
+  }
+
+  100% {
+    visibility: visible;
+    transform: translate(-50%, -50%) translateX(0) scale(1.08);
+    opacity: 1;
+    z-index: 3;
+  }
+}

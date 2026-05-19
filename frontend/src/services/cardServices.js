@@ -10,7 +10,7 @@ export async function analyzeCard() {
         accuracy: "0.0001", // live data later
         image: "dojobird", // live data later
         });
-    }, 1500);
+    }, 10000);
 
   });
 

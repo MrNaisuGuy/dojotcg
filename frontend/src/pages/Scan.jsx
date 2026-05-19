@@ -2,6 +2,10 @@ import React, { useState } from "react";
 import { analyzeCard } from "../services/cardServices.js";
 import ResultCard from "../components/ResultCard.jsx";
 import dojobird from "../assets/dojobird.png"; // delete later
+import CardCarousel from "../components/CardCarousel.jsx";
+import mtg from "../assets/mtg.png";
+import pokemon from "../assets/pokemon.png";
+import onepiece from "../assets/onepiece.png";
 
 function Scan() {
   const [selectedImage, setSelectedImage] = useState(null);
@@ -9,9 +13,12 @@ function Scan() {
   const [result, setResult] = useState(null);
   const [resultImage, setResultImage] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [showResult, setShowResult] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
   function handleImageUpload(event) {
+    setShowResult(false);
+
     const file = event.target.files[0];
     
     if (!file) return;
@@ -25,16 +32,18 @@ function Scan() {
     setSelectedImage(imageUrl);
 
     setResult(data);
-    setLoading(false);
+    setShowResult(true);
   }
 
   async function handleAnalyze() {
     setLoading(true);
+    setShowResult(false);
 
     const data = await analyzeCard();
 
     setResult(data);
     setLoading(false);
+    setShowResult(true);
   }
 
   return (
@@ -75,24 +84,20 @@ function Scan() {
           />
 
           <div style={{ marginTop: "1rem" }}>
-            <button onClick={handleAnalyze}>Analyze Card</button>
+            <button onClick={() => { handleAnalyze();}}>Analyze Card</button>
           </div>
         </div>
       )}
 
       {loading && 
-        <div style={{
-                      width: "40px",
-                      height: "40px",
-                      border: "4px solid #ddd",
-                      borderTop: "4px solid #2563eb",
-                      borderRadius: "50%",
-                      margin: "1rem auto",
-                      animation: "spin 1s linear infinite",
-                    }}
+        <CardCarousel
+          images={[mtg, pokemon, onepiece]}
         />
       }
-      <ResultCard result={result} />
+      
+      {showResult && result && (
+        <ResultCard result={result} />
+      )}
       
     </main>
   );
