@@ -7,7 +7,7 @@ function ResultCard({ result }) {
     <div style={{ marginTop: "2rem" }}>
       {result.image && (
         <img
-        src="public/images/dojobird.png" // change to result.image later
+        src="/images/dojobird.png" // change to result.image later
         alt={`Image URL: ${result.image}`}
         style={{
             width: "120px",
