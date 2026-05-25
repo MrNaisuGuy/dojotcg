@@ -2,6 +2,28 @@ import { readFile } from "node:fs/promises";
 import formidable from "formidable";
 import OpenAI from "openai";
 
+const FALLBACK_CARD_IMAGE = "/images/dojobird.png";
+const REGIONAL_PRICE_MULTIPLIERS = {
+  pokemon: {
+    jp: 0.9,
+    kr: 0.45,
+  },
+  onepiece: {
+    jp: 1.1,
+    kr: 0.35,
+  },
+  mtg: {
+    jp: 0.85,
+    kr: 0.65,
+  },
+};
+const CHARACTER_PRICE_MODIFIERS = [
+  { pattern: /charizard/i, multiplier: 1.2 },
+  { pattern: /pikachu/i, multiplier: 1.15 },
+  { pattern: /eevee|vaporeon|jolteon|flareon|espeon|umbreon|leafeon|glaceon|sylveon/i, multiplier: 1.25 },
+  { pattern: /lillie|marnie|iono|rosa|erika|misty|cynthia|jessie|serena|lusamine/i, multiplier: 1.4 },
+];
+
 if (process.loadEnvFile) {
   try {
     process.loadEnvFile(".env.local");
@@ -67,6 +89,317 @@ function normalizeNumber(value) {
     .trim();
 }
 
+function uniqueValues(values) {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function getCollectorNumberCandidates(value) {
+  const raw = String(value || "").trim();
+  const beforeSlash = raw.split("/")[0]?.trim();
+  const withoutLeadingZeroes = beforeSlash?.replace(/^0+/, "") || beforeSlash;
+
+  return uniqueValues([raw, beforeSlash, withoutLeadingZeroes]);
+}
+
+function parseCollectorNumber(value) {
+  const [number, printedTotal] = String(value || "")
+    .split("/")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  return {
+    number,
+    normalizedNumber: normalizeNumber(number),
+    printedTotal: printedTotal ? Number(printedTotal) : null,
+  };
+}
+
+function getGameKey(game) {
+  const normalized = normalizeValue(game);
+
+  if (normalized.includes("pokemon")) return "pokemon";
+  if (normalized.includes("magic") || normalized === "mtg") return "mtg";
+  if (normalized.includes("one piece")) return "onepiece";
+
+  return "unknown";
+}
+
+function roundPrice(price) {
+  return typeof price === "number" ? Math.round(price * 100) / 100 : null;
+}
+
+function getCharacterModifier(cardName) {
+  const modifier = CHARACTER_PRICE_MODIFIERS.find(({ pattern }) => pattern.test(cardName || ""));
+  return modifier?.multiplier || 1;
+}
+
+function estimateRegionalPrices(candidate) {
+  if (typeof candidate.lowestPrice !== "number") {
+    return {
+      us: null,
+      jp: null,
+      kr: null,
+      basePrice: null,
+      characterModifier: 1,
+    };
+  }
+
+  const gameKey = getGameKey(candidate.game);
+  const multipliers = REGIONAL_PRICE_MULTIPLIERS[gameKey];
+  const characterModifier = gameKey === "pokemon" ? getCharacterModifier(candidate.name) : 1;
+
+  if (!multipliers) {
+    return {
+      us: roundPrice(candidate.lowestPrice),
+      jp: null,
+      kr: null,
+      basePrice: roundPrice(candidate.lowestPrice),
+      characterModifier,
+    };
+  }
+
+  return {
+    us: roundPrice(candidate.lowestPrice),
+    jp: roundPrice(candidate.lowestPrice * multipliers.jp * characterModifier),
+    kr: roundPrice(candidate.lowestPrice * multipliers.kr * characterModifier),
+    basePrice: roundPrice(candidate.lowestPrice),
+    characterModifier,
+  };
+}
+
+function quotePokemonQueryValue(value) {
+  return String(value || "").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+function getPokemonQueryParts(candidate, { includeSet = false, includeNumber = true } = {}) {
+  const parts = [];
+
+  if (candidate.name) {
+    parts.push(`name:"${quotePokemonQueryValue(candidate.name)}"`);
+  }
+
+  if (includeNumber) {
+    const { number } = parseCollectorNumber(candidate.number);
+
+    if (number) {
+      parts.push(`number:"${quotePokemonQueryValue(number)}"`);
+    }
+  }
+
+  if (includeSet && candidate.set) {
+    parts.push(`set.name:"${quotePokemonQueryValue(candidate.set)}"`);
+  }
+
+  return parts;
+}
+
+function getPokemonSearchQuery(candidate) {
+  return getPokemonQueryParts(candidate).join(" ");
+}
+
+function getScryfallImageUrl(card) {
+  const imageUris = card.image_uris || card.card_faces?.[0]?.image_uris;
+  return imageUris?.normal || imageUris?.large || imageUris?.small || null;
+}
+
+function getOnePieceCardId(candidate) {
+  const possibleIds = [candidate.number, candidate.set, candidate.id].filter(Boolean);
+
+  for (const value of possibleIds) {
+    const match = String(value).toUpperCase().match(/[A-Z]{1,3}\d{2}-\d{3}/);
+    if (match) return match[0];
+  }
+
+  const setCode = String(candidate.set || candidate.id || "")
+    .toUpperCase()
+    .match(/[A-Z]{1,3}\d{2}/)?.[0];
+  const number = getCollectorNumberCandidates(candidate.number)
+    .map((value) => String(value).padStart(3, "0"))
+    .find((value) => /^\d{3}$/.test(value));
+
+  if (setCode && number) {
+    return `${setCode}-${number}`;
+  }
+
+  return null;
+}
+
+async function fetchJson(url, options = {}) {
+  const response = await fetch(url, options);
+
+  if (!response.ok) {
+    return null;
+  }
+
+  return response.json();
+}
+
+async function fetchPokemonImage(candidate) {
+  if (!candidate.name) return null;
+
+  const { number, normalizedNumber, printedTotal } = parseCollectorNumber(candidate.number);
+  const setName = normalizeValue(candidate.set);
+  const name = quotePokemonQueryValue(candidate.name);
+  const queries = uniqueValues([
+    getPokemonQueryParts(candidate, { includeSet: true, includeNumber: true }).join(" "),
+    getPokemonQueryParts(candidate, { includeSet: false, includeNumber: true }).join(" "),
+    candidate.set ? `name:"${name}" set.name:"${quotePokemonQueryValue(candidate.set)}"` : null,
+    `name:"${name}"`,
+  ]);
+  const headers = {};
+
+  if (process.env.POKEMONTCG_API_KEY) {
+    headers["X-Api-Key"] = process.env.POKEMONTCG_API_KEY;
+  }
+
+  for (const query of queries) {
+    const searchParams = new URLSearchParams({
+      q: query,
+      pageSize: "10",
+      select: "id,name,number,set,images",
+    });
+    const body = await fetchJson(
+      `https://api.pokemontcg.io/v2/cards?${searchParams.toString()}`,
+      { headers },
+    );
+    const cards = Array.isArray(body?.data) ? body.data : [];
+    const rankedCards = cards
+      .map((card) => {
+        let score = 0;
+
+        if (normalizeValue(card.name) === normalizeValue(candidate.name)) score += 40;
+        if (normalizedNumber && normalizeNumber(card.number) === normalizedNumber) score += 35;
+        if (setName && normalizeValue(card.set?.name) === setName) score += 20;
+        if (setName && normalizeValue(card.set?.name).includes(setName)) score += 10;
+        if (printedTotal && card.set?.printedTotal === printedTotal) score += 15;
+        if (printedTotal && card.set?.total === printedTotal) score += 8;
+
+        return { card, score };
+      })
+      .sort((a, b) => b.score - a.score);
+    const card = rankedCards[0]?.card;
+    const imageUrl = card?.images?.large || card?.images?.small || null;
+
+    if (imageUrl) {
+      return {
+        imageUrl,
+        imageSource: `pokemontcg.io${card?.set?.name ? ` (${card.set.name}${number ? ` #${number}` : ""})` : ""}`,
+      };
+    }
+  }
+
+  return null;
+}
+
+async function fetchScryfallImage(candidate) {
+  if (!candidate.name) return null;
+
+  const escapedName = candidate.name.replace(/"/g, '\\"');
+  const numberQueries = getCollectorNumberCandidates(candidate.number).map(
+    (number) => `!"${escapedName}" cn:${number}`,
+  );
+  const queries = uniqueValues([...numberQueries, `!"${escapedName}"`, `"${escapedName}"`]);
+  const headers = {
+    Accept: "application/json;q=0.9,*/*;q=0.8",
+    "User-Agent": "DojoTCG/0.0.1",
+  };
+
+  for (const query of queries) {
+    const searchParams = new URLSearchParams({
+      q: query,
+      unique: "prints",
+      order: "released",
+    });
+    const body = await fetchJson(
+      `https://api.scryfall.com/cards/search?${searchParams.toString()}`,
+      { headers },
+    );
+    const card = body?.data?.[0];
+    const imageUrl = card ? getScryfallImageUrl(card) : null;
+
+    if (imageUrl) {
+      return {
+        imageUrl,
+        imageSource: "Scryfall",
+      };
+    }
+  }
+
+  const namedParams = new URLSearchParams({ fuzzy: candidate.name });
+  const namedCard = await fetchJson(`https://api.scryfall.com/cards/named?${namedParams}`, {
+    headers,
+  });
+  const namedImageUrl = namedCard ? getScryfallImageUrl(namedCard) : null;
+
+  return namedImageUrl
+    ? {
+        imageUrl: namedImageUrl,
+        imageSource: "Scryfall",
+      }
+    : null;
+}
+
+async function fetchOnePieceImage(candidate) {
+  const cardId = getOnePieceCardId(candidate);
+  if (!cardId) return null;
+
+  const endpoints = [
+    `https://optcgapi.com/api/sets/card/${cardId}/`,
+    `https://optcgapi.com/api/decks/card/${cardId}/`,
+    `https://optcgapi.com/api/promos/card/${cardId}/`,
+  ];
+
+  for (const endpoint of endpoints) {
+    const responseBody = await fetchJson(endpoint);
+    const card = Array.isArray(responseBody) ? responseBody[0] : responseBody;
+    const imageUrl =
+      card?.card_image ||
+      card?.card_image_url ||
+      card?.image_url ||
+      card?.image ||
+      card?.images?.large ||
+      card?.images?.small ||
+      null;
+
+    if (imageUrl) {
+      return {
+        imageUrl,
+        imageSource: "OPTCG API",
+      };
+    }
+  }
+
+  return null;
+}
+
+async function fetchCardImage(candidate) {
+  const gameKey = getGameKey(candidate.game);
+
+  try {
+    if (gameKey === "pokemon") return await fetchPokemonImage(candidate);
+    if (gameKey === "mtg") return await fetchScryfallImage(candidate);
+    if (gameKey === "onepiece") return await fetchOnePieceImage(candidate);
+  } catch (error) {
+    console.error(`Image lookup failed for ${candidate.name}:`, error);
+  }
+
+  return null;
+}
+
+async function enrichCandidatesWithImages(candidates) {
+  return Promise.all(
+    candidates.map(async (candidate) => {
+      const imageData = await fetchCardImage(candidate);
+
+      return {
+        ...candidate,
+        imageUrl: imageData?.imageUrl || FALLBACK_CARD_IMAGE,
+        imageSource: imageData?.imageSource || "DojoTCG fallback",
+      };
+    }),
+  );
+}
+
 function scoreCandidate(cardData, candidate) {
   const reasons = [];
   let score = 0;
@@ -129,10 +462,12 @@ function formatJustTcgMatch(card, cardData) {
     tcgplayerId: card.tcgplayerId,
     lowestPrice,
   };
+  const regionalPrices = estimateRegionalPrices(candidate);
   const match = scoreCandidate(cardData, candidate);
 
   return {
     ...candidate,
+    regionalPrices,
     matchScore: match.score,
     matchReasons: match.reasons,
   };
@@ -190,7 +525,7 @@ async function findCandidates(cardData) {
     .slice(0, 5);
 
   return {
-    candidates,
+    candidates: await enrichCandidatesWithImages(candidates),
     searchQuery: rawCards.length > 0 ? primaryQuery : fallbackQuery,
   };
 }

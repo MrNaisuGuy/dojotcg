@@ -16,16 +16,18 @@ function Home() {
         height: "100vh",
         alignItems: "center",
         justifyContent: "center",
-        background: "#f5f7fb",
+        background: "#1e1e1e",
+        color: "#d4d4d4",
         margin: 0,
       }}
     >
       <div
         style={{
-          background: "#fff",
+          background: "#252526",
           padding: "2rem 2.5rem",
           borderRadius: "12px",
-          boxShadow: "0 8px 30px rgba(20,30,60,0.08)",
+          border: "1px solid #3c3c3c",
+          boxShadow: "0 8px 30px rgba(0,0,0,0.35)",
           maxWidth: "720px",
           textAlign: "center",
         }}
@@ -34,13 +36,14 @@ function Home() {
           style={{
             margin: "0 0 0.5rem",
             fontSize: "1.75rem",
+            color: "#f3f4f6",
           }}
         >
-          DojoTCG Coming Eventually
+          DojoTCG is in open alpha!
         </h1>
 
-        <p style={{ color: "#556" }}>
-          I'll get to it one day...maybeeee
+        <p style={{ color: "#c8c8c8" }}>
+          Memberships soon available.
         </p>
 
         <img

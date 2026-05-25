@@ -4,7 +4,7 @@ function ResultCard({ result }) {
   if (!result) return null;
 
   return (
-    <div style={{ marginTop: "2rem" }}>
+    <div style={{ marginTop: "2rem", color: "#d4d4d4" }}>
       {result.image && (
         <img
         src="/images/dojobird.png" // change to result.image later
@@ -18,10 +18,13 @@ function ResultCard({ result }) {
         />
       )}
 
-      <h2>Card matched with {result.accuracy}% accuracy.</h2>
+      <h1 className="text-3xl font-bold text-gray-100">Raw Scan Results</h1>
+      <h2 className="text-xl font-semibold text-gray-200">
+        Card matched with {result.accuracy}% accuracy.
+      </h2>
       <p>Name: {result.card}</p>
       <p>Game: {result.game}</p>
-      <p>Set: {result.set}</p>
+      <p>Set: {result.set || "not matched"}</p>
       <p>Language: {result.language}</p>
       <p>Estimated Price: {result.price}</p>
     </div>
