@@ -11,6 +11,8 @@
   "dependencies": {
     "cors": "^2.8.6",
     "express": "^5.2.1",
+    "formidable": "^3.5.4",
+    "openai": "^6.39.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.15.1"

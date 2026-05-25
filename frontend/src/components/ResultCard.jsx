@@ -20,6 +20,8 @@ function ResultCard({ result }) {
 
       <h2>Card matched with {result.accuracy}% accuracy.</h2>
       <p>Name: {result.card}</p>
+      <p>Game: {result.game}</p>
+      <p>Set: {result.set}</p>
       <p>Language: {result.language}</p>
       <p>Estimated Price: {result.price}</p>
     </div>

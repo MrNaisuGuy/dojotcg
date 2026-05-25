@@ -37,7 +37,8 @@ export async function analyzeCard(cardImage) {
   });
 
   if (!response.ok) {
-    throw new Error("Failed to analyze card");
+    const errorData = await response.json().catch(() => null);
+    throw new Error(errorData?.details || errorData?.error || "Failed to analyze card");
   }
 
   return response.json();

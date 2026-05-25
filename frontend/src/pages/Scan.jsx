@@ -48,7 +48,7 @@ function Scan() {
       setShowResult(true);
     } catch (error) {
       console.error(error);
-      alert("Analyze failed. Check console.");
+      alert(`Analyze failed: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -78,7 +78,7 @@ function Scan() {
       
       {selectedImage && (
         <div style={{ marginTop: "2rem" }}>
-          <p>{fileName || "Card Preview"}</p>
+          <p>Card Preview</p>
 
           <img
             src={selectedImage}
