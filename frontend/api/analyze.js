@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import formidable from "formidable";
 import OpenAI from "openai";
 
-if (!process.env.OPENAI_API_KEY && process.loadEnvFile) {
+if (process.loadEnvFile) {
   try {
     process.loadEnvFile(".env.local");
   } catch {
@@ -47,6 +47,152 @@ function parseJsonResponse(text) {
     : trimmed;
 
   return JSON.parse(jsonText);
+}
+
+function buildJustTcgQuery(cardData) {
+  return [cardData.card, cardData.number].filter(Boolean).join(" ");
+}
+
+function normalizeValue(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function normalizeNumber(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/^0+/, "")
+    .trim();
+}
+
+function scoreCandidate(cardData, candidate) {
+  const reasons = [];
+  let score = 0;
+
+  const guessedName = normalizeValue(cardData.card);
+  const candidateName = normalizeValue(candidate.name);
+  const guessedGame = normalizeValue(cardData.game);
+  const candidateGame = normalizeValue(candidate.game);
+  const guessedSet = normalizeValue(cardData.set);
+  const candidateSet = normalizeValue(candidate.set);
+  const guessedNumber = normalizeNumber(cardData.number);
+  const candidateNumber = normalizeNumber(candidate.number);
+
+  if (guessedName && candidateName === guessedName) {
+    score += 45;
+    reasons.push("exact name");
+  } else if (
+    guessedName &&
+    candidateName &&
+    (candidateName.includes(guessedName) || guessedName.includes(candidateName))
+  ) {
+    score += 30;
+    reasons.push("similar name");
+  }
+
+  if (guessedGame && candidateGame && candidateGame === guessedGame) {
+    score += 15;
+    reasons.push("same game");
+  }
+
+  if (guessedSet && candidateSet && candidateSet.includes(guessedSet)) {
+    score += 15;
+    reasons.push("set match");
+  }
+
+  if (guessedNumber && candidateNumber && candidateNumber === guessedNumber) {
+    score += 25;
+    reasons.push("collector number match");
+  }
+
+  return {
+    score: Math.min(score, 100),
+    reasons,
+  };
+}
+
+function formatJustTcgMatch(card, cardData) {
+  const variants = Array.isArray(card.variants) ? card.variants : [];
+  const lowestPrice = variants.reduce((lowest, variant) => {
+    if (typeof variant.price !== "number") return lowest;
+    return lowest === null ? variant.price : Math.min(lowest, variant.price);
+  }, null);
+  const candidate = {
+    id: card.id,
+    name: card.name,
+    game: card.game,
+    set: card.set_name || card.set,
+    number: card.number,
+    rarity: card.rarity,
+    tcgplayerId: card.tcgplayerId,
+    lowestPrice,
+  };
+  const match = scoreCandidate(cardData, candidate);
+
+  return {
+    ...candidate,
+    matchScore: match.score,
+    matchReasons: match.reasons,
+  };
+}
+
+async function fetchJustTcgCards(searchQuery) {
+  const searchParams = new URLSearchParams({
+    q: searchQuery,
+    limit: "10",
+  });
+
+  const response = await fetch(
+    `https://api.justtcg.com/v1/cards?${searchParams.toString()}`,
+    {
+      headers: {
+        "x-api-key": process.env.JUSTTCG_API_KEY,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`JustTCG search failed: ${response.status} ${errorText}`);
+  }
+
+  const body = await response.json();
+  return Array.isArray(body.data) ? body.data : [];
+}
+
+async function findCandidates(cardData) {
+  if (!process.env.JUSTTCG_API_KEY || !cardData.card) {
+    return {
+      candidates: [],
+      searchQuery: null,
+    };
+  }
+
+  const primaryQuery = buildJustTcgQuery(cardData);
+  const fallbackQuery = cardData.card;
+  const rawCards = await fetchJustTcgCards(primaryQuery);
+  const fallbackCards =
+    rawCards.length > 0 || primaryQuery === fallbackQuery
+      ? []
+      : await fetchJustTcgCards(fallbackQuery);
+
+  const cardsById = new Map();
+
+  for (const card of [...rawCards, ...fallbackCards]) {
+    cardsById.set(card.id, card);
+  }
+
+  const candidates = [...cardsById.values()]
+    .map((card) => formatJustTcgMatch(card, cardData))
+    .sort((a, b) => b.matchScore - a.matchScore)
+    .slice(0, 5);
+
+  return {
+    candidates,
+    searchQuery: rawCards.length > 0 ? primaryQuery : fallbackQuery,
+  };
 }
 
 export default async function handler(req, res) {
@@ -111,8 +257,20 @@ Use null when you are not sure. Accuracy should be a percentage from 0 to 100.`,
 
     const rawText = response.output_text;
     const parsed = parseJsonResponse(rawText);
+    let candidates = [];
+    let justtcgSearchQuery = null;
+    let justtcgError = null;
 
-    res.status(200).json({
+    try {
+      const candidateResult = await findCandidates(parsed);
+      candidates = candidateResult.candidates;
+      justtcgSearchQuery = candidateResult.searchQuery;
+    } catch (error) {
+      console.error(error);
+      justtcgError = error.message;
+    }
+
+    const visionGuess = {
       card: parsed.card,
       game: parsed.game,
       language: parsed.language,
@@ -121,7 +279,16 @@ Use null when you are not sure. Accuracy should be a percentage from 0 to 100.`,
       price: parsed.price || "Unknown",
       accuracy: parsed.accuracy,
       notes: parsed.notes,
+    };
+
+    res.status(200).json({
+      ...visionGuess,
       image: null,
+      visionGuess,
+      candidates,
+      justtcgMatches: candidates,
+      justtcgSearchQuery,
+      justtcgError,
       raw: rawText,
     });
   } catch (error) {

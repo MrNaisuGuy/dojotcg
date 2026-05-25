@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { analyzeCard } from "../services/cardServices.js";
 import ResultCard from "../components/ResultCard.jsx";
+import CandidateMatches from "../components/CandidateMatches.jsx";
 import CardCarousel from "../components/CardCarousel.jsx";
 import mtg from "../assets/mtg.png";
 import pokemon from "../assets/pokemon.png";
@@ -106,7 +107,14 @@ function Scan() {
       }
       
       {showResult && result && (
-        <ResultCard result={result} />
+        <>
+          <ResultCard result={result.visionGuess || result} />
+          <CandidateMatches
+            candidates={result.candidates || result.justtcgMatches}
+            error={result.justtcgError}
+            searchQuery={result.justtcgSearchQuery}
+          />
+        </>
       )}
       
     </main>
