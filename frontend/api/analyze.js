@@ -413,35 +413,64 @@ function scoreCandidate(cardData, candidate) {
   const guessedNumber = normalizeNumber(cardData.number);
   const candidateNumber = normalizeNumber(candidate.number);
 
-  if (guessedName && candidateName === guessedName) {
-    score += 45;
-    reasons.push("exact name");
-  } else if (
-    guessedName &&
-    candidateName &&
-    (candidateName.includes(guessedName) || guessedName.includes(candidateName))
-  ) {
-    score += 30;
-    reasons.push("similar name");
+  // Get OpenAI confidence scores (0-100), default to 50 if not provided
+  const gameConfidence = (cardData.confidenceScores?.game ?? cardData.gameConfidence ?? 50) / 100;
+  const setConfidence = (cardData.confidenceScores?.set ?? cardData.setConfidence ?? 50) / 100;
+  const cardConfidence = (cardData.confidenceScores?.card ?? cardData.cardConfidence ?? 50) / 100;
+
+  // CRITICAL: Game mismatch is a hard penalty
+  if (guessedGame && candidateGame && candidateGame !== guessedGame) {
+    score -= 50;
+    reasons.push("game mismatch");
+  } else if (guessedGame && candidateGame && candidateGame === guessedGame) {
+    // Boost game match using OpenAI's game confidence
+    score += 20 * gameConfidence;
+    reasons.push(`game match (${Math.round(gameConfidence * 100)}% confident)`);
   }
 
-  if (guessedGame && candidateGame && candidateGame === guessedGame) {
-    score += 15;
-    reasons.push("same game");
+  // Set matching with confidence weighting
+  if (guessedSet && candidateSet) {
+    if (candidateSet.includes(guessedSet) || guessedSet.includes(candidateSet)) {
+      score += 20 * setConfidence;
+      reasons.push(`set match (${Math.round(setConfidence * 100)}% confident)`);
+    }
   }
 
-  if (guessedSet && candidateSet && candidateSet.includes(guessedSet)) {
-    score += 15;
-    reasons.push("set match");
+  // Name matching with confidence weighting
+  if (guessedName && candidateName) {
+    if (candidateName === guessedName) {
+      score += 50 * cardConfidence;
+      reasons.push(`exact name (${Math.round(cardConfidence * 100)}% confident)`);
+    } else if (candidateName.includes(guessedName) || guessedName.includes(candidateName)) {
+      score += 35 * cardConfidence;
+      reasons.push(`similar name (${Math.round(cardConfidence * 100)}% confident)`);
+    }
   }
 
+  // Collector number matching
   if (guessedNumber && candidateNumber && candidateNumber === guessedNumber) {
-    score += 25;
+    score += 30;
     reasons.push("collector number match");
   }
 
+  // Rarity/edition matching (if available from both sides)
+  if (cardData.rarity && candidate.rarity) {
+    const guessedRarity = normalizeValue(cardData.rarity);
+    const candidateRarity = normalizeValue(candidate.rarity);
+    if (guessedRarity === candidateRarity) {
+      score += 15;
+      reasons.push("rarity match");
+    }
+  }
+
+  // Bonus for multiple strong matches
+  if (reasons.filter((r) => r.includes("match")).length >= 3) {
+    score += 10;
+    reasons.push("multi-field match bonus");
+  }
+
   return {
-    score: Math.min(score, 100),
+    score: Math.round(Math.min(Math.max(score, 0), 100) * 10) / 10,
     reasons,
   };
 }
@@ -564,21 +593,48 @@ export default async function handler(req, res) {
           content: [
             {
               type: "input_text",
-              text: `Identify this trading card from the uploaded image. Prioritize finding what card game it is from (Pokemon, Magic: The Gathering, One Piece, etc) and the card name. Then try to find the language, set, and number if available. Finally, provide an estimated price range and an accuracy percentage for your analysis.
+              text: `Analyze this trading card image in this order:
+
+1. GAME IDENTIFICATION (CRITICAL - determines everything else):
+   - Look at card layout, border style, logo, back-of-card design
+   - Determine: Pokemon, Magic: The Gathering (MTG), One Piece, or unknown
+   - Confidence: 0-100%
+
+2. SET/EDITION IDENTIFICATION (SECOND PRIORITY):
+   - Look for set symbol, holofoil pattern, border design, copyright year
+   - Common Pokemon: Base Set, Jungle, Fossil, Neo Genesis, WOTC, Modern era
+   - Common MTG: Look at mana symbols, copyright, frame design
+   - Common One Piece: Look at set codes (e.g., OP01, OP02)
+   - Confidence: 0-100%
+
+3. CARD DETAILS (ONCE GAME & SET KNOWN):
+   - Card name (exact spelling if readable)
+   - Collector number (e.g., "25/102")
+   - Rarity/Edition: common, uncommon, rare, holo, reverse holo, full art, secret rare, etc.
+   - Card type/color: (Pokemon type, MTG color, One Piece type)
+   - Language (English, Japanese, German, French, etc.)
+   - Estimated price range (based on rarity + condition appearance)
 
 Return JSON only with this exact shape:
 {
-  "card": string | null,
-  "game": "Pokemon" | "Magic: The Gathering" | "One Piece" | "This TCG Is Not Supported",
-  "language": string | null,
+  "game": "Pokemon" | "Magic: The Gathering" | "One Piece" | "Unknown",
+  "gameConfidence": number (0-100),
   "set": string | null,
+  "setConfidence": number (0-100),
+  "card": string | null,
+  "cardConfidence": number (0-100),
   "number": string | null,
+  "rarity": string | null,
+  "editionType": "holo" | "reverse-holo" | "full-art" | "secret-rare" | "normal" | null,
+  "cardType": string | null,
+  "language": string | null,
   "price": string | null,
-  "accuracy": number,
+  "conditionEstimate": "mint" | "near-mint" | "lightly-played" | "played" | "heavily-played" | null,
+  "overallAccuracy": number (0-100),
   "notes": string
 }
 
-Use null when you are not sure. Accuracy should be a percentage from 0 to 100.`,
+Use null for unknown fields. Confidence scores help us match against database records.`,
             },
             {
               type: "input_image",
@@ -608,11 +664,20 @@ Use null when you are not sure. Accuracy should be a percentage from 0 to 100.`,
     const visionGuess = {
       card: parsed.card,
       game: parsed.game,
-      language: parsed.language,
       set: parsed.set,
       number: parsed.number,
+      language: parsed.language,
+      rarity: parsed.rarity,
+      editionType: parsed.editionType,
+      cardType: parsed.cardType,
       price: parsed.price || "Unknown",
-      accuracy: parsed.accuracy,
+      conditionEstimate: parsed.conditionEstimate,
+      overallAccuracy: parsed.overallAccuracy,
+      confidenceScores: {
+        game: parsed.gameConfidence,
+        set: parsed.setConfidence,
+        card: parsed.cardConfidence,
+      },
       notes: parsed.notes,
     };
 

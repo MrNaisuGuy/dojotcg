@@ -20,7 +20,7 @@ function ResultCard({ result }) {
 
       <h1 className="text-3xl font-bold text-gray-100">Raw Scan Results</h1>
       <h2 className="text-xl font-semibold text-gray-200">
-        Card matched with {result.accuracy}% accuracy.
+        Card matched with {result.accuracy?.toFixed(1) || result.overallAccuracy?.toFixed(1) || "Unknown"}% accuracy.
       </h2>
       <p>Name: {result.card}</p>
       <p>Game: {result.game}</p>

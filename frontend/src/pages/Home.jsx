@@ -56,9 +56,12 @@ function Home() {
           }}
         />
 
-        <div style={{ marginTop: "1rem" }}>
+        <div style={{ marginTop: "1rem", display: "flex", gap: "1rem", justifyContent: "center" }}>
           <Link to="/scan">
-          <button>Start Scanning</button>
+            <button>Start Scanning</button>
+          </Link>
+          <Link to="/tcg-rules">
+            <button>TCG Rules</button>
           </Link>
         </div>
       </div>

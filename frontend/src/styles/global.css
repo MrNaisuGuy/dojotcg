@@ -78,6 +78,28 @@
     opacity: 0.65;
     box-shadow: none;
   }
+
+  .dojo-text-link {
+    display: inline-block;
+    color: #60a5fa;
+    text-decoration: none;
+    transform: translateY(0);
+    transition:
+      color 160ms ease,
+      text-shadow 160ms ease,
+      transform 80ms ease;
+  }
+
+  .dojo-text-link:hover,
+  .dojo-text-link:focus-visible {
+    color: #93c5fd;
+    text-shadow: 0 0 16px rgba(96, 165, 250, 0.36);
+  }
+
+  .dojo-text-link:active {
+    transform: translateY(1px);
+    color: #bfdbfe;
+  }
 }
 
 @keyframes spin {

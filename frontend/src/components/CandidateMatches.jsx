@@ -111,7 +111,7 @@ function CandidateMatches({ candidates = [], error, searchQuery }) {
               </div>
 
               <div style={{ textAlign: "right" }}>
-                <span>{candidate.matchScore}% match</span>
+                <span>{candidate.matchScore?.toFixed(1)}% match</span>
 
                 {candidate.imageUrl && (
                   <img
