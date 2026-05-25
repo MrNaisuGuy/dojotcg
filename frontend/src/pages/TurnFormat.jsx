@@ -18,14 +18,14 @@ const turnFormats = {
   mtg: {
     title: "Magic: The Gathering Turn Format",
     steps: [
-      { id: "untap", label: "Untap step", helper: "Turn your tapped cards upright so they are ready again.", required: true },
-      { id: "upkeep", label: "Upkeep step", helper: "Handle anything that says it happens at the beginning of your turn.", required: true },
-      { id: "draw", label: "Draw step", helper: "Draw one card from your library.", required: true },
+      { id: "untap", label: "Untap", helper: "Turn your tapped cards upright so they are ready again.", required: true },
+      { id: "upkeep", label: "Upkeep", helper: "Handle anything that says it happens at the beginning of your turn.", required: true },
+      { id: "draw", label: "Draw", helper: "Draw one card from your library.", required: true },
       { id: "main-1", label: "First main phase", helper: "Play a land if you can and cast spells before combat." },
       { id: "combat", label: "Combat phase", helper: "Choose attackers, let blockers happen, and deal combat damage." },
       { id: "main-2", label: "Second main phase", helper: "Cast more spells or play your land if you saved it." },
-      { id: "end", label: "End step", helper: "Resolve anything that says it happens at the end of the turn.", required: true },
-      { id: "cleanup", label: "Cleanup step", helper: "Discard down to hand size and clear damage or until-end effects.", required: true, endsTurn: true },
+      { id: "end", label: "End", helper: "Resolve anything that says it happens at the end of the turn.", required: true },
+      { id: "cleanup", label: "Cleanup", helper: "Discard down to maximum hand size (usually 7 cards) and clear damage or until end of turn effects.", required: true, endsTurn: true },
     ],
   },
   onepiece: {
@@ -37,8 +37,7 @@ const turnFormats = {
       { id: "main-play", label: "Play cards", helper: "Use DON!! to play Characters, Events, or Stages from your hand." },
       { id: "main-attach", label: "Attach DON!! cards", helper: "Give DON!! cards to your Leader or Characters to make them stronger." },
       { id: "main-activate", label: "Activate effects", helper: "Use any card effects that are available during your main phase." },
-      { id: "attack", label: "Attack or pass", helper: "Swing with your Leader or Characters, or skip attacking." },
-      { id: "end", label: "End turn", helper: "Finish your actions and pass control to the other player.", required: true, endsTurn: true },
+      { id: "attack", label: "Attack or pass", helper: "Swing with your Leader or Characters, or skip attacking.", required: true, endsTurn: true },
     ],
   },
 };
