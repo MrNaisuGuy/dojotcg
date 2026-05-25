@@ -21,6 +21,7 @@ function Scan() {
 
   function handleImageUpload(event) {
     setShowResult(false);
+    setSwipeProgress(0);
 
     const file = event.target.files[0];
     
@@ -36,7 +37,7 @@ function Scan() {
     setSelectedImage(imageUrl);
   }
 
-  async function handleAnalyze() {
+  async function handleAnalyze({ keepSwipeComplete = false } = {}) {
     if (!selectedFile) {
       alert("Please upload a card image first.");
       return;
@@ -55,6 +56,9 @@ function Scan() {
       alert(`Analyze failed: ${error.message}`);
     } finally {
       setLoading(false);
+      if (keepSwipeComplete) {
+        setSwipeProgress(0);
+      }
     }
   }
 
@@ -84,12 +88,15 @@ function Scan() {
 
     const completed = swipeProgress >= 0.82;
 
+    if (completed) {
+      setSwipeActive(false);
+      setSwipeProgress(1);
+      handleAnalyze({ keepSwipeComplete: true });
+      return;
+    }
+
     setSwipeActive(false);
     setSwipeProgress(0);
-
-    if (completed) {
-      handleAnalyze();
-    }
   }
 
   return (
@@ -97,15 +104,7 @@ function Scan() {
       <p>
          <label
           htmlFor="card-upload"
-          style={{
-            display: "inline-block",
-            padding: "1rem 2rem",
-            background: "#2563eb",
-            color: "white",
-            borderRadius: "12px",
-            cursor: "pointer",
-            fontWeight: "bold",
-          }}
+          className="upload-card-button"
          >
           {isMobile ? "Take a picture of your card." : "Upload a card image to analyze it."}
          </label>
@@ -163,10 +162,39 @@ function Scan() {
                     transition: swipeActive ? "none" : "width 180ms ease",
                   }}
                 />
+                <div
+                  aria-hidden="true"
+                  style={{
+                    position: "absolute",
+                    zIndex: 2,
+                    top: "50%",
+                    left: `calc(${swipeProgress * 100}% - ${swipeProgress * 48}px)`,
+                    width: "44px",
+                    height: "44px",
+                    borderRadius: "999px",
+                    background: "#ffffff",
+                    boxShadow: "0 8px 20px rgba(0, 0, 0, 0.28)",
+                    display: "grid",
+                    placeItems: "center",
+                    transform: "translate(6px, -50%)",
+                    transition: swipeActive ? "none" : "left 180ms ease",
+                  }}
+                >
+                  <span
+                    style={{
+                      color: "#2563eb",
+                      fontSize: "1.25rem",
+                      lineHeight: 1,
+                      fontWeight: 900,
+                    }}
+                  >
+                    &rsaquo;
+                  </span>
+                </div>
                 <span
                   style={{
                     position: "relative",
-                    zIndex: 1,
+                    zIndex: 3,
                     display: "grid",
                     height: "100%",
                     placeItems: "center",

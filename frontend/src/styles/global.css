@@ -32,13 +32,43 @@
       transform 160ms ease;
   }
 
+  .upload-card-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 10px;
+    background: #2563eb;
+    color: #ffffff;
+    padding: 1rem 2rem;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.22);
+    transition:
+      background-color 160ms ease,
+      box-shadow 160ms ease,
+      transform 160ms ease;
+  }
+
   button:hover:not(:disabled) {
     background: #1d4ed8;
     box-shadow: 0 10px 24px rgba(37, 99, 235, 0.28);
     transform: translateY(-1px);
   }
 
+  .upload-card-button:hover {
+    background: #1d4ed8;
+    box-shadow: 0 10px 24px rgba(37, 99, 235, 0.28);
+    transform: translateY(-1px);
+  }
+
   button:focus-visible {
+    outline: 3px solid rgba(37, 99, 235, 0.35);
+    outline-offset: 3px;
+  }
+
+  .upload-card-button:focus-visible {
     outline: 3px solid rgba(37, 99, 235, 0.35);
     outline-offset: 3px;
   }
