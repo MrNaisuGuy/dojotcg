@@ -1,5 +1,5 @@
-import React from "react";
-import { Routes, Route } from "react-router-dom";
+import React, { useLayoutEffect } from "react";
+import { Routes, Route, useLocation } from "react-router-dom";
 
 import Home from "./pages/Home.jsx";
 import Scan from "./pages/Scan.jsx";
@@ -8,6 +8,12 @@ import TCGRules from "./pages/TCGRules.jsx";
 import TurnFormat from "./pages/TurnFormat.jsx";
 
 function App() {
+  const { pathname } = useLocation();
+
+  useLayoutEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [pathname]);
+
   return (
     <Routes>
       <Route path="/" element={<Home />} />

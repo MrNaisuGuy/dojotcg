@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import pokemon from "../assets/pokemon.png";
@@ -79,6 +79,8 @@ function ResourceLink({ link }) {
 
 function TCGRules() {
   const [selectedGameName, setSelectedGameName] = useState(null);
+  const [isNarrowScreen, setIsNarrowScreen] = useState(false);
+  const resourcePanelRef = useRef(null);
   const games = [
     {
       name: "Pokemon TCG",
@@ -132,6 +134,47 @@ function TCGRules() {
     borderRadius: "8px",
   };
   const selectedGame = games.find((game) => game.name === selectedGameName);
+
+  function getScrollBehavior() {
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+  }
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 640px)");
+    const syncNarrowScreen = () => setIsNarrowScreen(mediaQuery.matches);
+
+    syncNarrowScreen();
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener("change", syncNarrowScreen);
+    } else {
+      mediaQuery.addListener(syncNarrowScreen);
+    }
+
+    return () => {
+      if (mediaQuery.removeEventListener) {
+        mediaQuery.removeEventListener("change", syncNarrowScreen);
+      } else {
+        mediaQuery.removeListener(syncNarrowScreen);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!selectedGameName || !isNarrowScreen) return;
+
+    const animationFrame = window.requestAnimationFrame(() => {
+      resourcePanelRef.current?.scrollIntoView({
+        block: "start",
+        behavior: getScrollBehavior(),
+      });
+    });
+
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [isNarrowScreen, selectedGameName]);
+
+  function showSelectedResources() {
+    resourcePanelRef.current?.scrollIntoView({ block: "start", behavior: getScrollBehavior() });
+  }
 
   return (
     <main style={pageStyles}>
@@ -223,8 +266,31 @@ function TCGRules() {
           })}
         </div>
 
+        {selectedGame && isNarrowScreen && (
+          <button
+            type="button"
+            aria-label={`Show ${selectedGame.name} resources`}
+            onClick={showSelectedResources}
+            style={{
+              width: "100%",
+              margin: "0 0 1rem",
+              padding: "0.65rem",
+              borderRadius: "8px",
+              background: "#2d2d30",
+              border: "1px solid #60a5fa",
+              color: "#bfdbfe",
+              boxShadow: "0 8px 20px rgba(96, 165, 250, 0.14)",
+              fontSize: "1.15rem",
+              lineHeight: 1,
+            }}
+          >
+            &darr;
+          </button>
+        )}
+
         {selectedGame && (
           <section
+            ref={resourcePanelRef}
             style={{
               ...panelStyles,
               padding: "1.5rem",
