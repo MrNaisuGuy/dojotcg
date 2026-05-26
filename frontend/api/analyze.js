@@ -675,10 +675,12 @@ function formatSupabaseCardMatch(card, cardData) {
     dataSource: "Supabase card catalog",
     raw: card.raw,
   };
+  const regionalPrices = estimateRegionalPrices(candidate);
   const match = scoreCandidate(cardData, candidate);
 
   return {
     ...candidate,
+    regionalPrices,
     matchScore: match.score,
     matchReasons: match.reasons,
   };

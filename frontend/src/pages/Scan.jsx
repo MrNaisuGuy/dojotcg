@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { analyzeCard } from "../services/cardServices.js";
 import CandidateMatches from "../components/CandidateMatches.jsx";
 import CardCarousel from "../components/CardCarousel.jsx";
@@ -262,6 +263,20 @@ function Scan() {
 
   return (
     <main style={{ minHeight: "100vh", padding: "2rem", textAlign: "center", background: "#1e1e1e", color: "#d4d4d4" }}>
+      <div style={{ maxWidth: "760px", margin: "0 auto 1.5rem", textAlign: "left" }}>
+        <Link
+          className="dojo-text-link"
+          to="/"
+          style={{
+            display: "inline-block",
+            textDecoration: "none",
+            fontSize: "0.95rem",
+          }}
+        >
+          &larr; Back to Home
+        </Link>
+      </div>
+
       {isMobile ? (
         <div style={{ display: "grid", gap: "0.75rem", justifyContent: "center" }}>
           <button type="button" className="upload-card-button" onClick={openCamera}>
@@ -392,7 +407,7 @@ function Scan() {
                     position: "absolute",
                     inset: 0,
                     width: `${Math.max(swipeProgress * 100, 18)}%`,
-                    background: "#2563eb",
+                    background: "#5b21b6",
                     transition: swipeActive ? "none" : "width 180ms ease",
                   }}
                 />
@@ -416,7 +431,7 @@ function Scan() {
                 >
                   <span
                     style={{
-                      color: "#2563eb",
+                      color: "#5b21b6",
                       fontSize: "1.25rem",
                       lineHeight: 1,
                       fontWeight: 900,

@@ -33,13 +33,46 @@ function MatchCheck({ label, matched }) {
         padding: "0.28rem 0",
         borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
         fontSize: "0.78rem",
+        textAlign: "left",
       }}
     >
-      <span style={{ color: "#e5e7eb" }}>{label}</span>
+      <span style={{ color: "#e5e7eb", textAlign: "left" }}>{label}</span>
       <span style={{ color: matched ? "#22c55e" : "#a6a6a6", fontWeight: 800 }}>
         {matched ? "✓ Exact" : "Review"}
       </span>
     </div>
+  );
+}
+
+function PriceRow({ countryCode, label, value }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
+      <span
+        style={{
+          display: "inline-block",
+          width: "1.22em",
+          height: "1.22em",
+          borderRadius: "2px",
+          boxSizing: "border-box",
+          overflow: "hidden",
+          boxShadow: "0 0 10px rgba(124, 58, 237, 0.58)",
+        }}
+      >
+        <img
+          src={`https://flagcdn.com/${countryCode}.svg`}
+          alt=""
+          aria-hidden="true"
+          style={{
+            display: "block",
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+          }}
+        />
+      </span>
+      <span style={{ color: "#a6a6a6" }}>{label}</span>
+      <strong style={{ color: "#f3f4f6" }}>{formatPrice(value)}</strong>
+    </span>
   );
 }
 
@@ -93,7 +126,14 @@ function CandidateCard({ candidate, isBest }) {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "92px minmax(0, 1fr)", gap: "0.85rem", marginTop: "0.9rem" }}>
+      <div
+        style={{
+          display: "grid",
+          justifyItems: "center",
+          marginTop: "0.9rem",
+          textAlign: "center",
+        }}
+      >
         <div>
           {candidate.imageUrl && (
             <img
@@ -102,7 +142,7 @@ function CandidateCard({ candidate, isBest }) {
               loading="lazy"
               style={{
                 display: "block",
-                width: "92px",
+                width: "112px",
                 aspectRatio: "63 / 88",
                 objectFit: "cover",
                 borderRadius: "5px",
@@ -112,32 +152,44 @@ function CandidateCard({ candidate, isBest }) {
           )}
         </div>
 
-        <div style={{ minWidth: 0 }}>
-          <h3 style={{ margin: "0 0 0.2rem", fontSize: "0.98rem", color: "#ffffff", fontWeight: 900 }}>
+        <div style={{ minWidth: 0, maxWidth: "13rem", marginTop: "0.65rem", textAlign: "center" }}>
+          <h3 style={{ margin: "0 0 0.3rem", fontSize: "1rem", color: "#ffffff", fontWeight: 900, lineHeight: 1.2 }}>
             {candidate.name}
           </h3>
-          <p style={{ margin: 0, color: "#d1d5db", fontSize: "0.78rem", lineHeight: 1.35 }}>
+          <p style={{ margin: 0, color: "#d1d5db", fontSize: "0.8rem", lineHeight: 1.35 }}>
             {candidate.rarity || "Unknown rarity"}
           </p>
-          <p style={{ margin: "0.25rem 0 0", color: "#a6a6a6", fontSize: "0.76rem", lineHeight: 1.35 }}>
+          <p style={{ margin: "0.3rem 0 0", color: "#a6a6a6", fontSize: "0.78rem", lineHeight: 1.35 }}>
             {candidate.set || "Unknown set"}
           </p>
-          <p style={{ margin: "0.2rem 0 0", color: "#a6a6a6", fontSize: "0.76rem" }}>
+          <p style={{ margin: "0.2rem 0 0", color: "#a6a6a6", fontSize: "0.78rem" }}>
             {candidate.number ? `#${candidate.number}` : "#N/A"}
           </p>
         </div>
       </div>
 
-      <div style={{ marginTop: "0.9rem" }}>
+      <div style={{ marginTop: "0.9rem", textAlign: "left" }}>
         <MatchCheck label="Card Name" matched={cardNameMatched} />
         <MatchCheck label="Set" matched={setMatched} />
         <MatchCheck label="Collector Number" matched={numberMatched} />
         <MatchCheck label="Rarity" matched={rarityMatched} />
       </div>
 
-      <p style={{ margin: "0.8rem 0 0", color: "#d1d5db", fontSize: "0.82rem", fontWeight: 800 }}>
-        US {formatPrice(regionalPrices.us)}
-      </p>
+      <div
+        style={{
+          display: "flex",
+          gap: "0.65rem",
+          flexWrap: "wrap",
+          justifyContent: "center",
+          marginTop: "0.8rem",
+          fontSize: "0.8rem",
+          textAlign: "center",
+        }}
+      >
+        <PriceRow countryCode="us" label="US" value={regionalPrices.us} />
+        <PriceRow countryCode="jp" label="JP est." value={regionalPrices.jp} />
+        <PriceRow countryCode="kr" label="KOR est." value={regionalPrices.kr} />
+      </div>
 
       <button
         type="button"
