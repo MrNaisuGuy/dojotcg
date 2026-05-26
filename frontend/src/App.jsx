@@ -1,5 +1,6 @@
 import React, { useLayoutEffect } from "react";
 import { Routes, Route, useLocation } from "react-router-dom";
+import { Analytics } from "@vercel/analytics/react";
 
 import Home from "./pages/Home.jsx";
 import Scan from "./pages/Scan.jsx";
@@ -15,13 +16,16 @@ function App() {
   }, [pathname]);
 
   return (
-    <Routes>
-      <Route path="/" element={<Home />} />
-      <Route path="/scan" element={<Scan />} />
-      <Route path="/tcg-rules" element={<TCGRules />} />
-      <Route path="/player-layout/:game" element={<PlayerLayout />} />
-      <Route path="/turn-format/:game" element={<TurnFormat />} />
-    </Routes>
+    <>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/scan" element={<Scan />} />
+        <Route path="/tcg-rules" element={<TCGRules />} />
+        <Route path="/player-layout/:game" element={<PlayerLayout />} />
+        <Route path="/turn-format/:game" element={<TurnFormat />} />
+      </Routes>
+      <Analytics />
+    </>
   );
 }
 
