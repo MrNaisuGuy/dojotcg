@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "sync:pokemon": "node scripts/sync-pokemon-cards.js",
-    "backfill:prices": "node scripts/backfill-card-prices.js"
+    "sync:pokemon:card": "node scripts/sync-pokemon-card-by-id.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.2",
