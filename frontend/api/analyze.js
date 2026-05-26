@@ -3,6 +3,8 @@ import formidable from "formidable";
 import OpenAI from "openai";
 
 const FALLBACK_CARD_IMAGE = "/images/dojobird.png";
+const JUSTTCG_QUERY_LIMIT = 4;
+const DEBUG_IMAGE_LOOKUP = process.env.DEBUG_IMAGE_LOOKUP === "true";
 const REGIONAL_PRICE_MULTIPLIERS = {
   pokemon: {
     jp: 0.9,
@@ -71,10 +73,6 @@ function parseJsonResponse(text) {
   return JSON.parse(jsonText);
 }
 
-function buildJustTcgQuery(cardData) {
-  return [cardData.card, cardData.number].filter(Boolean).join(" ");
-}
-
 function normalizeValue(value) {
   return String(value || "")
     .toLowerCase()
@@ -91,6 +89,14 @@ function normalizeNumber(value) {
 
 function uniqueValues(values) {
   return [...new Set(values.filter(Boolean))];
+}
+
+function compactQuery(parts) {
+  return parts
+    .filter(Boolean)
+    .map((part) => String(part).trim())
+    .filter(Boolean)
+    .join(" ");
 }
 
 function getCollectorNumberCandidates(value) {
@@ -112,6 +118,81 @@ function parseCollectorNumber(value) {
     normalizedNumber: normalizeNumber(number),
     printedTotal: printedTotal ? Number(printedTotal) : null,
   };
+}
+
+function normalizeExtractedName(value, collectorNumber) {
+  let name = String(value || "").trim();
+  const { number } = parseCollectorNumber(collectorNumber);
+
+  if (number) {
+    name = name
+      .replace(new RegExp(`\\s*#?${number.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, "i"), "")
+      .trim();
+  }
+
+  return name
+    .replace(/\s+-\s+#?\d+[a-z]?(?:\/\d+)?\s*$/i, "")
+    .replace(/\s+#?\d+[a-z]?(?:\/\d+)?\s*$/i, "")
+    .trim() || null;
+}
+
+function normalizeExtractedCardData(parsed) {
+  const collectorNumber = parsed.collectorNumber || parsed.number || null;
+  const set = parsed.setName || parsed.set || parsed.setCode || null;
+  const englishName = normalizeExtractedName(parsed.englishNameGuess, collectorNumber);
+  const card = normalizeExtractedName(parsed.name || parsed.card, collectorNumber) || englishName;
+
+  return {
+    ...parsed,
+    name: card,
+    card,
+    localName: parsed.localName || null,
+    romanizedName: parsed.romanizedName || null,
+    englishNameGuess: englishName,
+    englishNameConfidence: parsed.englishNameConfidence ?? null,
+    number: collectorNumber,
+    collectorNumber,
+    printedTotal: parsed.printedTotal ?? null,
+    set,
+    setName: parsed.setName || null,
+    setCode: parsed.setCode || null,
+    cardID: parsed.cardID || parsed.cardId || null,
+  };
+}
+
+function getSetCandidates(cardData) {
+  return uniqueValues([cardData.setCode, cardData.setName, cardData.set]);
+}
+
+function buildJustTcgQueries(cardData) {
+  const name = cardData.englishNameGuess || cardData.card;
+  const collectorNumber = cardData.collectorNumber || cardData.number;
+  const cardID = cardData.cardID || cardData.cardId;
+  const { number, printedTotal } = parseCollectorNumber(collectorNumber);
+  const total = cardData.printedTotal || printedTotal;
+  const setCandidates = getSetCandidates(cardData);
+  const visibleText = Array.isArray(cardData.visibleText) ? cardData.visibleText : [];
+  const usefulVisibleText = visibleText
+    .filter((text) => normalizeValue(text).length >= 4)
+    .slice(0, 3);
+  const setNameQueries = setCandidates.flatMap((setValue) => [
+    compactQuery([setValue, name, number, total]),
+    compactQuery([setValue, name, number]),
+    compactQuery([setValue, name, collectorNumber]),
+    compactQuery([setValue, name]),
+  ]);
+
+  return uniqueValues([
+    ...setNameQueries,
+    compactQuery([name, number, total]),
+    compactQuery([name, number]),
+    compactQuery([name, collectorNumber]),
+    cardID,
+    compactQuery([name, cardID]),
+    compactQuery([collectorNumber, total]),
+    name,
+    ...usefulVisibleText.map((text) => compactQuery([name, text])),
+  ]).slice(0, JUSTTCG_QUERY_LIMIT);
 }
 
 function getGameKey(game) {
@@ -193,17 +274,21 @@ function getPokemonQueryParts(candidate, { includeSet = false, includeNumber = t
   return parts;
 }
 
-function getPokemonSearchQuery(candidate) {
-  return getPokemonQueryParts(candidate).join(" ");
-}
-
 function getScryfallImageUrl(card) {
   const imageUris = card.image_uris || card.card_faces?.[0]?.image_uris;
   return imageUris?.normal || imageUris?.large || imageUris?.small || null;
 }
 
 function getOnePieceCardId(candidate) {
-  const possibleIds = [candidate.number, candidate.set, candidate.id].filter(Boolean);
+  const possibleIds = [
+    candidate.cardID,
+    candidate.cardId,
+    candidate.collectorNumber,
+    candidate.number,
+    candidate.setCode,
+    candidate.set,
+    candidate.id,
+  ].filter(Boolean);
 
   for (const value of possibleIds) {
     const match = String(value).toUpperCase().match(/[A-Z]{1,3}\d{2}-\d{3}/);
@@ -235,70 +320,101 @@ async function fetchJson(url, options = {}) {
 }
 
 async function fetchPokemonImage(candidate) {
-  if (!candidate.name) return null;
+  const { number, normalizedNumber, printedTotal } = parseCollectorNumber(
+    candidate.number || candidate.collectorNumber,
+  );
+  const extractedNumber = parseCollectorNumber(candidate.collectorNumber);
+  const targetPrintedTotal = printedTotal || candidate.printedTotal || extractedNumber.printedTotal;
 
-  const { number, normalizedNumber, printedTotal } = parseCollectorNumber(candidate.number);
-  const setName = normalizeValue(candidate.set);
-  const name = quotePokemonQueryValue(candidate.name);
-  const queries = uniqueValues([
-    getPokemonQueryParts(candidate, { includeSet: true, includeNumber: true }).join(" "),
-    getPokemonQueryParts(candidate, { includeSet: false, includeNumber: true }).join(" "),
-    candidate.set ? `name:"${name}" set.name:"${quotePokemonQueryValue(candidate.set)}"` : null,
-    `name:"${name}"`,
-  ]);
+  if (!candidate.name || !number || !targetPrintedTotal) return null;
+
+  const query = `name:"${quotePokemonQueryValue(candidate.name)}" number:"${quotePokemonQueryValue(number)}" set.printedTotal:${Number(targetPrintedTotal)}`;
+  const debug = {
+    provider: "pokemontcg.io",
+    query,
+    candidateName: candidate.name,
+    candidateSet: candidate.set,
+    candidateNumber: candidate.number,
+    targetPrintedTotal,
+    resultCount: 0,
+    topScore: null,
+    topResult: null,
+    accepted: false,
+  };
   const headers = {};
 
   if (process.env.POKEMONTCG_API_KEY) {
     headers["X-Api-Key"] = process.env.POKEMONTCG_API_KEY;
   }
 
-  for (const query of queries) {
-    const searchParams = new URLSearchParams({
-      q: query,
-      pageSize: "10",
-      select: "id,name,number,set,images",
-    });
-    const body = await fetchJson(
-      `https://api.pokemontcg.io/v2/cards?${searchParams.toString()}`,
-      { headers },
-    );
-    const cards = Array.isArray(body?.data) ? body.data : [];
-    const rankedCards = cards
-      .map((card) => {
-        let score = 0;
+  const searchParams = new URLSearchParams({
+    q: query,
+    pageSize: "10",
+    select: "id,name,number,set,images",
+  });
+  const body = await fetchJson(
+    `https://api.pokemontcg.io/v2/cards?${searchParams.toString()}`,
+    { headers },
+  );
+  const cards = Array.isArray(body?.data) ? body.data : [];
+  debug.resultCount = cards.length;
+  const rankedCards = cards
+    .map((card) => {
+      let score = 0;
+      const numberMatches = normalizedNumber && normalizeNumber(card.number) === normalizedNumber;
+      const nameMatches = candidate.name && normalizeValue(card.name) === normalizeValue(candidate.name);
+      const nameContains = candidate.name && normalizeValue(card.name).includes(normalizeValue(candidate.name));
+      const printedTotalMatches = card.set?.printedTotal === Number(targetPrintedTotal);
 
-        if (normalizeValue(card.name) === normalizeValue(candidate.name)) score += 40;
-        if (normalizedNumber && normalizeNumber(card.number) === normalizedNumber) score += 35;
-        if (setName && normalizeValue(card.set?.name) === setName) score += 20;
-        if (setName && normalizeValue(card.set?.name).includes(setName)) score += 10;
-        if (printedTotal && card.set?.printedTotal === printedTotal) score += 15;
-        if (printedTotal && card.set?.total === printedTotal) score += 8;
+      if (numberMatches) score += 50;
+      if (printedTotalMatches) score += 40;
+      if (nameMatches) score += 35;
+      if (nameContains) score += 18;
 
-        return { card, score };
-      })
-      .sort((a, b) => b.score - a.score);
-    const card = rankedCards[0]?.card;
-    const imageUrl = card?.images?.large || card?.images?.small || null;
-
-    if (imageUrl) {
       return {
-        imageUrl,
-        imageSource: `pokemontcg.io${card?.set?.name ? ` (${card.set.name}${number ? ` #${number}` : ""})` : ""}`,
+        card,
+        score,
+        hasSafeIdentityMatch: Boolean(numberMatches && printedTotalMatches && (nameMatches || nameContains)),
       };
-    }
+    })
+    .sort((a, b) => b.score - a.score);
+  const bestMatch = rankedCards[0];
+  debug.topScore = bestMatch?.score ?? null;
+  debug.topResult = bestMatch?.card
+    ? {
+        id: bestMatch.card.id,
+        name: bestMatch.card.name,
+        number: bestMatch.card.number,
+        setName: bestMatch.card.set?.name,
+        printedTotal: bestMatch.card.set?.printedTotal,
+        total: bestMatch.card.set?.total,
+      }
+    : null;
+  const card = bestMatch?.hasSafeIdentityMatch || bestMatch?.score >= 85 ? bestMatch.card : null;
+  const imageUrl = card?.images?.large || null;
+
+  if (imageUrl) {
+    debug.accepted = true;
+
+    return {
+      imageUrl,
+      imageSource: `pokemontcg.io (${card.set.name} #${card.number})`,
+      imageLookupDebug: DEBUG_IMAGE_LOOKUP ? debug : undefined,
+    };
   }
 
-  return null;
+  return DEBUG_IMAGE_LOOKUP ? { imageUrl: null, imageSource: null, imageLookupDebug: debug } : null;
 }
 
 async function fetchScryfallImage(candidate) {
-  if (!candidate.name) return null;
+  const collectorNumbers = getCollectorNumberCandidates(candidate.collectorNumber || candidate.number);
+  if (collectorNumbers.length === 0) return null;
 
-  const escapedName = candidate.name.replace(/"/g, '\\"');
-  const numberQueries = getCollectorNumberCandidates(candidate.number).map(
-    (number) => `!"${escapedName}" cn:${number}`,
-  );
-  const queries = uniqueValues([...numberQueries, `!"${escapedName}"`, `"${escapedName}"`]);
+  const escapedName = candidate.name?.replace(/"/g, '\\"');
+  const queries = uniqueValues([
+    ...collectorNumbers.map((number) => `cn:${number}`),
+    ...(escapedName ? collectorNumbers.map((number) => `!"${escapedName}" cn:${number}`) : []),
+  ]);
   const headers = {
     Accept: "application/json;q=0.9,*/*;q=0.8",
     "User-Agent": "DojoTCG/0.0.1",
@@ -314,7 +430,11 @@ async function fetchScryfallImage(candidate) {
       `https://api.scryfall.com/cards/search?${searchParams.toString()}`,
       { headers },
     );
-    const card = body?.data?.[0];
+    const cards = Array.isArray(body?.data) ? body.data : [];
+    const card =
+      cards.find((item) => normalizeValue(item.name) === normalizeValue(candidate.name)) ||
+      cards.find((item) => collectorNumbers.some((number) => normalizeNumber(item.collector_number) === normalizeNumber(number))) ||
+      cards[0];
     const imageUrl = card ? getScryfallImageUrl(card) : null;
 
     if (imageUrl) {
@@ -325,18 +445,7 @@ async function fetchScryfallImage(candidate) {
     }
   }
 
-  const namedParams = new URLSearchParams({ fuzzy: candidate.name });
-  const namedCard = await fetchJson(`https://api.scryfall.com/cards/named?${namedParams}`, {
-    headers,
-  });
-  const namedImageUrl = namedCard ? getScryfallImageUrl(namedCard) : null;
-
-  return namedImageUrl
-    ? {
-        imageUrl: namedImageUrl,
-        imageSource: "Scryfall",
-      }
-    : null;
+  return null;
 }
 
 async function fetchOnePieceImage(candidate) {
@@ -395,6 +504,7 @@ async function enrichCandidatesWithImages(candidates) {
         ...candidate,
         imageUrl: imageData?.imageUrl || FALLBACK_CARD_IMAGE,
         imageSource: imageData?.imageSource || "DojoTCG fallback",
+        imageLookupDebug: imageData?.imageLookupDebug,
       };
     }),
   );
@@ -409,14 +519,21 @@ function scoreCandidate(cardData, candidate) {
   const guessedGame = normalizeValue(cardData.game);
   const candidateGame = normalizeValue(candidate.game);
   const guessedSet = normalizeValue(cardData.set);
+  const guessedSetCode = normalizeValue(cardData.setCode);
+  const guessedSetName = normalizeValue(cardData.setName);
   const candidateSet = normalizeValue(candidate.set);
   const guessedNumber = normalizeNumber(cardData.number);
   const candidateNumber = normalizeNumber(candidate.number);
+  const parsedGuessedNumber = parseCollectorNumber(cardData.collectorNumber || cardData.number);
+  const parsedCandidateNumber = parseCollectorNumber(candidate.number);
+  const guessedPrintedTotal = cardData.printedTotal || parsedGuessedNumber.printedTotal;
 
   // Get OpenAI confidence scores (0-100), default to 50 if not provided
   const gameConfidence = (cardData.confidenceScores?.game ?? cardData.gameConfidence ?? 50) / 100;
   const setConfidence = (cardData.confidenceScores?.set ?? cardData.setConfidence ?? 50) / 100;
   const cardConfidence = (cardData.confidenceScores?.card ?? cardData.cardConfidence ?? 50) / 100;
+  const collectorNumberConfidence =
+    (cardData.confidenceScores?.collectorNumber ?? cardData.collectorNumberConfidence ?? 50) / 100;
 
   // CRITICAL: Game mismatch is a hard penalty
   if (guessedGame && candidateGame && candidateGame !== guessedGame) {
@@ -436,6 +553,18 @@ function scoreCandidate(cardData, candidate) {
     }
   }
 
+  if (guessedSetCode && candidateSet && candidateSet.includes(guessedSetCode)) {
+    score += 22 * setConfidence;
+    reasons.push(`set code match (${Math.round(setConfidence * 100)}% confident)`);
+  }
+
+  if (guessedSetName && candidateSet) {
+    if (candidateSet.includes(guessedSetName) || guessedSetName.includes(candidateSet)) {
+      score += 18 * setConfidence;
+      reasons.push(`set name match (${Math.round(setConfidence * 100)}% confident)`);
+    }
+  }
+
   // Name matching with confidence weighting
   if (guessedName && candidateName) {
     if (candidateName === guessedName) {
@@ -449,8 +578,24 @@ function scoreCandidate(cardData, candidate) {
 
   // Collector number matching
   if (guessedNumber && candidateNumber && candidateNumber === guessedNumber) {
-    score += 30;
-    reasons.push("collector number match");
+    score += 40 * collectorNumberConfidence;
+    reasons.push(`collector number match (${Math.round(collectorNumberConfidence * 100)}% confident)`);
+  } else if (
+    parsedGuessedNumber.normalizedNumber &&
+    parsedCandidateNumber.normalizedNumber &&
+    parsedCandidateNumber.normalizedNumber === parsedGuessedNumber.normalizedNumber
+  ) {
+    score += 32 * collectorNumberConfidence;
+    reasons.push(`collector number base match (${Math.round(collectorNumberConfidence * 100)}% confident)`);
+  }
+
+  if (
+    guessedPrintedTotal &&
+    parsedCandidateNumber.printedTotal &&
+    Number(guessedPrintedTotal) === parsedCandidateNumber.printedTotal
+  ) {
+    score += 10;
+    reasons.push("printed total match");
   }
 
   // Rarity/edition matching (if available from both sides)
@@ -483,10 +628,16 @@ function formatJustTcgMatch(card, cardData) {
   }, null);
   const candidate = {
     id: card.id,
-    name: card.name,
+    name: normalizeExtractedName(card.name, card.number) || card.name,
+    rawName: card.name,
     game: card.game,
     set: card.set_name || card.set,
     number: card.number,
+    cardID: cardData.cardID,
+    collectorNumber: cardData.collectorNumber,
+    printedTotal: cardData.printedTotal,
+    setCode: cardData.setCode,
+    setName: cardData.setName,
     rarity: card.rarity,
     tcgplayerId: card.tcgplayerId,
     lowestPrice,
@@ -534,18 +685,28 @@ async function findCandidates(cardData) {
     };
   }
 
-  const primaryQuery = buildJustTcgQuery(cardData);
-  const fallbackQuery = cardData.card;
-  const rawCards = await fetchJustTcgCards(primaryQuery);
-  const fallbackCards =
-    rawCards.length > 0 || primaryQuery === fallbackQuery
-      ? []
-      : await fetchJustTcgCards(fallbackQuery);
+  const queries = buildJustTcgQueries(cardData);
+  const searchResults = await Promise.allSettled(
+    queries.map(async (query) => ({
+      query,
+      cards: await fetchJustTcgCards(query),
+    })),
+  );
+  const successfulResults = searchResults
+    .filter((result) => result.status === "fulfilled")
+    .map((result) => result.value);
+  const firstError = searchResults.find((result) => result.status === "rejected")?.reason;
+
+  if (successfulResults.length === 0 && firstError) {
+    throw firstError;
+  }
 
   const cardsById = new Map();
 
-  for (const card of [...rawCards, ...fallbackCards]) {
-    cardsById.set(card.id, card);
+  for (const { cards } of successfulResults) {
+    for (const card of cards) {
+      cardsById.set(card.id, card);
+    }
   }
 
   const candidates = [...cardsById.values()]
@@ -555,7 +716,7 @@ async function findCandidates(cardData) {
 
   return {
     candidates: await enrichCandidatesWithImages(candidates),
-    searchQuery: rawCards.length > 0 ? primaryQuery : fallbackQuery,
+    searchQuery: successfulResults.map((result) => result.query).join(" | "),
   };
 }
 
@@ -593,48 +754,60 @@ export default async function handler(req, res) {
           content: [
             {
               type: "input_text",
-              text: `Analyze this trading card image in this order:
+              text: `Extract only visible identifying facts from this trading card image. Do not guess a database id, product id, market price, or condition. If a field is not readable, use null and mention it in uncertainFields.
 
-1. GAME IDENTIFICATION (CRITICAL - determines everything else):
-   - Look at card layout, border style, logo, back-of-card design
-   - Determine: Pokemon, Magic: The Gathering (MTG), One Piece, or unknown
-   - Confidence: 0-100%
-
-2. SET/EDITION IDENTIFICATION (SECOND PRIORITY):
-   - Look for set symbol, holofoil pattern, border design, copyright year
-   - Common Pokemon: Base Set, Jungle, Fossil, Neo Genesis, WOTC, Modern era
-   - Common MTG: Look at mana symbols, copyright, frame design
-   - Common One Piece: Look at set codes (e.g., OP01, OP02)
-   - Confidence: 0-100%
-
-3. CARD DETAILS (ONCE GAME & SET KNOWN):
-   - Card name (exact spelling if readable)
-   - Collector number (e.g., "25/102")
-   - Rarity/Edition: common, uncommon, rare, holo, reverse holo, full art, secret rare, etc.
-   - Card type/color: (Pokemon type, MTG color, One Piece type)
-   - Language (English, Japanese, German, French, etc.)
-   - Estimated price range (based on rarity + condition appearance)
+Prioritize exact text and printed identifiers:
+1. Identify the game from visual layout and printed branding: Pokemon, Magic: The Gathering, One Piece, or Unknown.
+2. Read the exact card name if visible.
+3. For Pokemon, first try to extract the practical lookup pair: exact card name + collector number.
+   - Example: if the card says "Umbreon" and "#161", return name "Umbreon" and collectorNumber "161".
+   - If the card shows a fraction like "161/203", return collectorNumber "161/203" and printedTotal 203.
+   - If only the top/left number is readable, return that number instead of guessing the total.
+4. If the Pokemon card name is Japanese or Korean:
+   - Put the printed non-English name in localName.
+   - Put a romanized reading in romanizedName when possible.
+   - Infer the likely official English Pokemon TCG card name in englishNameGuess.
+   - Do not translate attack names or ability names as the card name.
+   - Prefer the Pokemon species/card title printed at the top.
+   - Return null for englishNameGuess if uncertain.
+5. Read the collector/card number exactly as printed for all games.
+   - If fraction card number is top number and printed total is bottom number.
+   - Collector number can be the fraction or following examples.
+   - Pokemon examples: "25/102", "SVP 001", "TG05/TG30" 
+   - Magic examples: "123/281", "123", "123★"
+   - One Piece examples: "OP01-001", "ST10-003", "P-001"
+6. Read any set code, set name, set symbol text, printed total, language, rarity, foil/treatment, copyright year, and useful visible text fragments.
+7. Confidence scores should describe readability, not whether a database match exists.
 
 Return JSON only with this exact shape:
 {
   "game": "Pokemon" | "Magic: The Gathering" | "One Piece" | "Unknown",
-  "gameConfidence": number (0-100),
-  "set": string | null,
-  "setConfidence": number (0-100),
-  "card": string | null,
-  "cardConfidence": number (0-100),
-  "number": string | null,
-  "rarity": string | null,
-  "editionType": "holo" | "reverse-holo" | "full-art" | "secret-rare" | "normal" | null,
-  "cardType": string | null,
+  "gameConfidence": number,
+  "name": string | null,
+  "nameConfidence": number,
+  "localName": string | null,
+  "romanizedName": string | null,
+  "englishNameGuess": string | null,
+  "englishNameConfidence": number,
+  "collectorNumber": string | null,
+  "collectorNumberConfidence": number,
+  "setCode": string | null,
+  "setName": string | null,
+  "setConfidence": number,
+  "printedTotal": number | null,
   "language": string | null,
-  "price": string | null,
-  "conditionEstimate": "mint" | "near-mint" | "lightly-played" | "played" | "heavily-played" | null,
-  "overallAccuracy": number (0-100),
+  "rarity": string | null,
+  "foilTreatment": "holo" | "reverse-holo" | "full-art" | "secret-rare" | "normal" | null,
+  "cardType": string | null,
+  "copyrightYear": number | null,
+  "visibleText": string[],
+  "uncertainFields": string[],
+  "overallAccuracy": number,
+  "cardID": string | null,
   "notes": string
 }
 
-Use null for unknown fields. Confidence scores help us match against database records.`,
+Use numbers from 0 to 100 for confidence fields. Keep visibleText short and only include text you can see on the card.`,
             },
             {
               type: "input_image",
@@ -647,7 +820,7 @@ Use null for unknown fields. Confidence scores help us match against database re
     });
 
     const rawText = response.output_text;
-    const parsed = parseJsonResponse(rawText);
+    const parsed = normalizeExtractedCardData(parseJsonResponse(rawText));
     let candidates = [];
     let justtcgSearchQuery = null;
     let justtcgError = null;
@@ -666,17 +839,32 @@ Use null for unknown fields. Confidence scores help us match against database re
       game: parsed.game,
       set: parsed.set,
       number: parsed.number,
+      localName: parsed.localName,
+      romanizedName: parsed.romanizedName,
+      englishNameGuess: parsed.englishNameGuess,
+      englishNameConfidence: parsed.englishNameConfidence,
+      collectorNumber: parsed.collectorNumber,
+      cardID: parsed.cardID,
+      printedTotal: parsed.printedTotal,
+      setCode: parsed.setCode,
+      setName: parsed.setName,
       language: parsed.language,
       rarity: parsed.rarity,
-      editionType: parsed.editionType,
+      editionType: parsed.foilTreatment || parsed.editionType,
+      foilTreatment: parsed.foilTreatment,
       cardType: parsed.cardType,
       price: parsed.price || "Unknown",
       conditionEstimate: parsed.conditionEstimate,
+      copyrightYear: parsed.copyrightYear,
+      visibleText: parsed.visibleText || [],
+      uncertainFields: parsed.uncertainFields || [],
       overallAccuracy: parsed.overallAccuracy,
       confidenceScores: {
         game: parsed.gameConfidence,
         set: parsed.setConfidence,
-        card: parsed.cardConfidence,
+        card: parsed.nameConfidence ?? parsed.cardConfidence,
+        englishName: parsed.englishNameConfidence,
+        collectorNumber: parsed.collectorNumberConfidence,
       },
       notes: parsed.notes,
     };
