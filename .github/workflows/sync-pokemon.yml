@@ -3,8 +3,8 @@ name: Sync Pokemon Cards
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 9 * * *"
-    
+    - cron: "5 14 * * *"
+
 jobs:
   sync-cards:
     runs-on: ubuntu-latest
