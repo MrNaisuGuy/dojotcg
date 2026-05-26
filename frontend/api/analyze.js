@@ -645,6 +645,8 @@ function getLocalLookupNames(cardData) {
 }
 
 function formatSupabaseCardMatch(card, cardData) {
+  const tcgplayerId = card.raw?.tcgplayer?.url?.match(/product\/(\d+)/)?.[1] || null;
+  const lowestPrice = typeof card.price_usd === "number" ? card.price_usd : null;
   const candidate = {
     id: card.id,
     externalId: card.external_id,
@@ -656,9 +658,21 @@ function formatSupabaseCardMatch(card, cardData) {
     collectorNumber: cardData.collectorNumber,
     printedTotal: card.printed_total,
     rarity: card.rarity,
-    lowestPrice: null,
+    tcgplayerId,
+    lowestPrice,
+    regionalPrices: {
+      us: lowestPrice,
+      jp: null,
+      kr: null,
+      basePrice: lowestPrice,
+      characterModifier: 1,
+    },
+    priceSource: card.price_source,
+    priceVariant: card.price_variant,
+    priceUpdatedAt: card.price_updated_at,
     imageUrl: card.image_url || FALLBACK_CARD_IMAGE,
     imageSource: card.image_url ? "Supabase card catalog" : "DojoTCG fallback",
+    dataSource: "Supabase card catalog",
     raw: card.raw,
   };
   const match = scoreCandidate(cardData, candidate);
@@ -692,7 +706,7 @@ async function findLocalCandidates(cardData) {
   ].filter(Boolean);
   let query = supabase
     .from("cards")
-    .select("id,external_id,game,name,set_name,set_id,number,printed_total,rarity,image_url,raw")
+    .select("id,external_id,game,name,set_name,set_id,number,printed_total,rarity,image_url,price_usd,price_source,price_variant,price_updated_at,raw")
     .eq("game", gameKey)
     .in("name", names)
     .eq("number", number)

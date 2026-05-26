@@ -26,7 +26,35 @@ const supabase = createClient(supabaseUrl, serviceRoleKey, {
   },
 });
 
+function getBestPokemonPrice(card) {
+  const priceEntries = Object.entries(card.tcgplayer?.prices || {});
+  const marketEntry =
+    priceEntries.find(([, price]) => typeof price.market === "number") ||
+    priceEntries.find(([, price]) => typeof price.mid === "number") ||
+    priceEntries.find(([, price]) => typeof price.low === "number");
+
+  if (!marketEntry) {
+    return {
+      price_usd: null,
+      price_source: null,
+      price_variant: null,
+      price_updated_at: null,
+    };
+  }
+
+  const [variant, price] = marketEntry;
+
+  return {
+    price_usd: price.market ?? price.mid ?? price.low ?? null,
+    price_source: "tcgplayer",
+    price_variant: variant,
+    price_updated_at: card.tcgplayer?.updatedAt || null,
+  };
+}
+
 function normalizeCard(card) {
+  const priceData = getBestPokemonPrice(card);
+
   return {
     game: "pokemon",
     external_id: card.id,
@@ -37,6 +65,7 @@ function normalizeCard(card) {
     printed_total: card.set?.printedTotal || null,
     rarity: card.rarity || null,
     image_url: card.images?.large || card.images?.small || null,
+    ...priceData,
     source: "pokemontcg.io",
     raw: card,
     updated_at: new Date().toISOString(),
@@ -101,7 +130,7 @@ async function printSyncSummary() {
 
   const { data, error: sampleError } = await supabase
     .from("cards")
-    .select("external_id,name,set_name,number,printed_total")
+    .select("external_id,name,set_name,number,printed_total,price_usd,price_variant")
     .eq("game", "pokemon")
     .order("created_at", { ascending: false })
     .limit(3);
