@@ -24,6 +24,9 @@ const supabase = createClient(supabaseUrl, serviceRoleKey, {
     persistSession: false,
     autoRefreshToken: false,
   },
+  realtime: {
+    WebSocket: class SyncDisabledWebSocket {},
+  },
 });
 
 function getBestPokemonPrice(card) {
