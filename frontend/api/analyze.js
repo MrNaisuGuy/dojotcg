@@ -1,10 +1,12 @@
 import { readFile } from "node:fs/promises";
 import formidable from "formidable";
 import OpenAI from "openai";
+import { createClient } from "@supabase/supabase-js";
 
 const FALLBACK_CARD_IMAGE = "/images/dojobird.png";
 const JUSTTCG_QUERY_LIMIT = 4;
 const DEBUG_IMAGE_LOOKUP = process.env.DEBUG_IMAGE_LOOKUP === "true";
+const ENABLE_EXTERNAL_CARD_LOOKUPS = process.env.ENABLE_EXTERNAL_CARD_LOOKUPS === "true";
 const REGIONAL_PRICE_MULTIPLIERS = {
   pokemon: {
     jp: 0.9,
@@ -32,6 +34,24 @@ if (process.loadEnvFile) {
   } catch {
     // Vercel production should receive env vars from Project Settings.
   }
+}
+
+function getJustTcgApiKey() {
+  return process.env.JUSTTCG_API_KEY?.trim();
+}
+
+function getSupabaseServerClient() {
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !serviceRoleKey) return null;
+
+  return createClient(supabaseUrl, serviceRoleKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
 }
 
 export const config = {
@@ -620,6 +640,85 @@ function scoreCandidate(cardData, candidate) {
   };
 }
 
+function getLocalLookupNames(cardData) {
+  return uniqueValues([cardData.englishNameGuess, cardData.card, cardData.name]);
+}
+
+function formatSupabaseCardMatch(card, cardData) {
+  const candidate = {
+    id: card.id,
+    externalId: card.external_id,
+    name: card.name,
+    game: card.game,
+    set: card.set_name,
+    setId: card.set_id,
+    number: card.number,
+    collectorNumber: cardData.collectorNumber,
+    printedTotal: card.printed_total,
+    rarity: card.rarity,
+    lowestPrice: null,
+    imageUrl: card.image_url || FALLBACK_CARD_IMAGE,
+    imageSource: card.image_url ? "Supabase card catalog" : "DojoTCG fallback",
+    raw: card.raw,
+  };
+  const match = scoreCandidate(cardData, candidate);
+
+  return {
+    ...candidate,
+    matchScore: match.score,
+    matchReasons: match.reasons,
+  };
+}
+
+async function findLocalCandidates(cardData) {
+  const supabase = getSupabaseServerClient();
+  const gameKey = getGameKey(cardData.game);
+  const { number, printedTotal } = parseCollectorNumber(cardData.collectorNumber || cardData.number);
+  const targetPrintedTotal = cardData.printedTotal || printedTotal;
+  const names = getLocalLookupNames(cardData);
+
+  if (!supabase || !gameKey || names.length === 0 || !number) {
+    return {
+      candidates: [],
+      searchQuery: null,
+    };
+  }
+
+  const queryParts = [
+    `game=${gameKey}`,
+    `name in (${names.join(", ")})`,
+    `number=${number}`,
+    targetPrintedTotal ? `printed_total=${targetPrintedTotal}` : null,
+  ].filter(Boolean);
+  let query = supabase
+    .from("cards")
+    .select("id,external_id,game,name,set_name,set_id,number,printed_total,rarity,image_url,raw")
+    .eq("game", gameKey)
+    .in("name", names)
+    .eq("number", number)
+    .limit(10);
+
+  if (targetPrintedTotal) {
+    query = query.eq("printed_total", Number(targetPrintedTotal));
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw error;
+  }
+
+  const candidates = (data || [])
+    .map((card) => formatSupabaseCardMatch(card, cardData))
+    .sort((a, b) => b.matchScore - a.matchScore)
+    .slice(0, 5);
+
+  return {
+    candidates,
+    searchQuery: queryParts.join(" | "),
+  };
+}
+
 function formatJustTcgMatch(card, cardData) {
   const variants = Array.isArray(card.variants) ? card.variants : [];
   const lowestPrice = variants.reduce((lowest, variant) => {
@@ -654,6 +753,7 @@ function formatJustTcgMatch(card, cardData) {
 }
 
 async function fetchJustTcgCards(searchQuery) {
+  const apiKey = getJustTcgApiKey();
   const searchParams = new URLSearchParams({
     q: searchQuery,
     limit: "10",
@@ -663,7 +763,7 @@ async function fetchJustTcgCards(searchQuery) {
     `https://api.justtcg.com/v1/cards?${searchParams.toString()}`,
     {
       headers: {
-        "x-api-key": process.env.JUSTTCG_API_KEY,
+        "x-api-key": apiKey,
       },
     },
   );
@@ -678,7 +778,15 @@ async function fetchJustTcgCards(searchQuery) {
 }
 
 async function findCandidates(cardData) {
-  if (!process.env.JUSTTCG_API_KEY || !cardData.card) {
+  const localResult = await findLocalCandidates(cardData);
+
+  if (localResult.candidates.length > 0 || !ENABLE_EXTERNAL_CARD_LOOKUPS) {
+    return localResult;
+  }
+
+  const apiKey = getJustTcgApiKey();
+
+  if (!apiKey || !cardData.card) {
     return {
       candidates: [],
       searchQuery: null,
@@ -686,6 +794,11 @@ async function findCandidates(cardData) {
   }
 
   const queries = buildJustTcgQueries(cardData);
+  console.info("JustTCG lookup", {
+    keyLength: apiKey.length,
+    keyPrefix: apiKey.slice(0, 4),
+    queryCount: queries.length,
+  });
   const searchResults = await Promise.allSettled(
     queries.map(async (query) => ({
       query,
