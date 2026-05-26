@@ -25,7 +25,7 @@ const supabase = createClient(supabaseUrl, serviceRoleKey, {
     autoRefreshToken: false,
   },
   realtime: {
-    WebSocket: class SyncDisabledWebSocket {},
+    transport: class SyncDisabledWebSocket {},
   },
 });
 

@@ -51,6 +51,9 @@ function getSupabaseServerClient() {
       persistSession: false,
       autoRefreshToken: false,
     },
+    realtime: {
+      transport: class ApiDisabledWebSocket {},
+    },
   });
 }
 
