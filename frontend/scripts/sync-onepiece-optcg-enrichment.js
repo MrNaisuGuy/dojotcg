@@ -18,6 +18,8 @@ const maxRequests = Number(process.env.ONEPIECE_ENRICH_MAX_REQUESTS || 0);
 const skipRecentDays = Number(process.env.ONEPIECE_ENRICH_SKIP_RECENT_DAYS || 7);
 const startAfter = normalizeOnePieceCardId(process.env.ONEPIECE_ENRICH_START_AFTER);
 const dryRun = process.env.ONEPIECE_ENRICH_DRY_RUN === "true";
+const supabaseMaxAttempts = readPositiveNumber(process.env.ONEPIECE_ENRICH_SUPABASE_MAX_ATTEMPTS, 5);
+const supabaseRetryDelayMs = readPositiveNumber(process.env.ONEPIECE_ENRICH_SUPABASE_RETRY_DELAY_MS, 2000);
 
 class OptcgRateLimitError extends Error {
   constructor(message, retryAfterSeconds = null) {
@@ -44,6 +46,60 @@ const supabase = createClient(supabaseUrl, serviceRoleKey, {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function readPositiveNumber(value, fallback) {
+  const parsed = Number(value);
+
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function getErrorText(error) {
+  return [
+    error?.message,
+    error?.details,
+    error?.hint,
+    error?.code,
+    error?.status,
+    error?.name,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function isRetryableSupabaseError(error) {
+  const status = Number(error?.status);
+  if (status === 408 || status === 429 || status >= 500) return true;
+
+  return /fetch failed|network|socket|und_err|econnreset|etimedout|timeout|terminated/i.test(getErrorText(error));
+}
+
+async function runSupabaseQuery(queryFactory, label) {
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= supabaseMaxAttempts; attempt += 1) {
+    try {
+      const result = await queryFactory();
+
+      if (!result?.error) return result;
+
+      lastError = result.error;
+    } catch (error) {
+      lastError = error;
+    }
+
+    if (attempt >= supabaseMaxAttempts || !isRetryableSupabaseError(lastError)) {
+      throw lastError;
+    }
+
+    const delayMs = Math.min(supabaseRetryDelayMs * 2 ** (attempt - 1), 30000);
+    console.warn(
+      `Supabase ${label} failed (${attempt}/${supabaseMaxAttempts}): ${getErrorText(lastError) || "unknown error"}. Retrying in ${delayMs}ms.`,
+    );
+    await sleep(delayMs);
+  }
+
+  throw lastError;
 }
 
 function normalizeOnePieceCardId(value) {
@@ -245,15 +301,17 @@ async function fetchOnePieceCards() {
 
   for (let from = 0; ; from += batchSize) {
     const to = from + batchSize - 1;
-    const { data, error } = await supabase
-      .from("cards")
-      .select("id,external_id,game,name,number,image_url,price_usd,price_source,price_variant,price_updated_at,raw")
-      .eq("game", "onepiece")
-      .not("number", "is", null)
-      .order("number", { ascending: true })
-      .range(from, to);
+    const { data } = await runSupabaseQuery(
+      () => supabase
+        .from("cards")
+        .select("id,external_id,game,name,number,image_url,price_usd,price_source,price_variant,price_updated_at,raw")
+        .eq("game", "onepiece")
+        .not("number", "is", null)
+        .order("number", { ascending: true })
+        .range(from, to),
+      `select cards ${from}-${to}`,
+    );
 
-    if (error) throw error;
     if (!data || data.length === 0) break;
 
     rows.push(...data);
@@ -295,12 +353,14 @@ async function updateRows(rows, enrichmentByCardId) {
       continue;
     }
 
-    const { error } = await supabase
-      .from("cards")
-      .update(update)
-      .eq("id", row.id);
+    await runSupabaseQuery(
+      () => supabase
+        .from("cards")
+        .update(update)
+        .eq("id", row.id),
+      `update card ${row.number || row.id}`,
+    );
 
-    if (error) throw error;
     updated += 1;
   }
 
