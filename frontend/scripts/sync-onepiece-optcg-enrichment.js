@@ -11,10 +11,21 @@ if (process.loadEnvFile) {
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const batchSize = Number(process.env.ONEPIECE_ENRICH_BATCH_SIZE || 1000);
-const requestDelayMs = Number(process.env.ONEPIECE_ENRICH_REQUEST_DELAY_MS || 250);
+const requestDelayMs = Number(process.env.ONEPIECE_ENRICH_REQUEST_DELAY_MS || 2500);
 const requestTimeoutMs = Number(process.env.ONEPIECE_ENRICH_REQUEST_TIMEOUT_MS || 30000);
 const maxCards = Number(process.env.ONEPIECE_ENRICH_MAX_CARDS || 0);
+const maxRequests = Number(process.env.ONEPIECE_ENRICH_MAX_REQUESTS || 0);
+const skipRecentDays = Number(process.env.ONEPIECE_ENRICH_SKIP_RECENT_DAYS || 7);
+const startAfter = normalizeOnePieceCardId(process.env.ONEPIECE_ENRICH_START_AFTER);
 const dryRun = process.env.ONEPIECE_ENRICH_DRY_RUN === "true";
+
+class OptcgRateLimitError extends Error {
+  constructor(message, retryAfterSeconds = null) {
+    super(message);
+    this.name = "OptcgRateLimitError";
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
 
 if (!supabaseUrl || !serviceRoleKey) {
   console.error("Missing SUPABASE_URL/VITE_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.");
@@ -99,6 +110,22 @@ function getPriceData(card) {
   };
 }
 
+function getOptcgUpdatedAt(row) {
+  const value = row.raw?.optcg?.updated_at;
+  const time = value ? new Date(value).getTime() : NaN;
+
+  return Number.isFinite(time) ? time : null;
+}
+
+function shouldSkipRecent(row) {
+  if (skipRecentDays <= 0) return false;
+
+  const updatedAt = getOptcgUpdatedAt(row);
+  if (!updatedAt) return false;
+
+  return Date.now() - updatedAt < skipRecentDays * 24 * 60 * 60 * 1000;
+}
+
 function mergeRaw(existingRaw, optcgCard, endpointType) {
   const raw = existingRaw && typeof existingRaw === "object" && !Array.isArray(existingRaw)
     ? existingRaw
@@ -127,11 +154,16 @@ function mergeRaw(existingRaw, optcgCard, endpointType) {
 }
 
 function getOptcgEndpoints(cardId) {
-  return [
-    { type: "sets", url: `https://optcgapi.com/api/sets/card/${cardId}/?format=json` },
-    { type: "decks", url: `https://optcgapi.com/api/decks/card/${cardId}/?format=json` },
-    { type: "promos", url: `https://optcgapi.com/api/promos/card/${cardId}/?format=json` },
-  ];
+  const endpoints = {
+    sets: { type: "sets", url: `https://optcgapi.com/api/sets/card/${cardId}/?format=json` },
+    decks: { type: "decks", url: `https://optcgapi.com/api/decks/card/${cardId}/?format=json` },
+    promos: { type: "promos", url: `https://optcgapi.com/api/promos/card/${cardId}/?format=json` },
+  };
+
+  if (cardId.startsWith("ST")) return [endpoints.decks, endpoints.sets, endpoints.promos];
+  if (cardId.startsWith("P-")) return [endpoints.promos, endpoints.sets, endpoints.decks];
+
+  return [endpoints.sets, endpoints.decks, endpoints.promos];
 }
 
 async function fetchJson(url) {
@@ -148,6 +180,19 @@ async function fetchJson(url) {
     });
 
     if (response.status === 404) return null;
+
+    if (response.status === 429) {
+      const errorText = await response.text();
+      const retryAfterHeader = Number(response.headers.get("retry-after"));
+      const retryAfterBody = Number(errorText.match(/available in (\d+) seconds/i)?.[1]);
+      const retryAfterSeconds = Number.isFinite(retryAfterHeader)
+        ? retryAfterHeader
+        : Number.isFinite(retryAfterBody)
+          ? retryAfterBody
+          : null;
+
+      throw new OptcgRateLimitError(`429 ${errorText.slice(0, 500)}`, retryAfterSeconds);
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -264,11 +309,21 @@ async function updateRows(rows, enrichmentByCardId) {
 
 async function syncOnePieceOptcgEnrichment() {
   const rows = await fetchOnePieceCards();
-  const cardIds = [...new Set(rows.map((row) => normalizeOnePieceCardId(row.number)).filter(Boolean))];
+  const rowsToCheck = rows.filter((row) => {
+    const cardId = normalizeOnePieceCardId(row.number);
+
+    if (!cardId) return false;
+    if (startAfter && cardId <= startAfter) return false;
+    return !shouldSkipRecent(row);
+  });
+  const allCardIds = [...new Set(rowsToCheck.map((row) => normalizeOnePieceCardId(row.number)).filter(Boolean))];
+  const cardIds = maxRequests > 0 ? allCardIds.slice(0, maxRequests) : allCardIds;
   const enrichmentByCardId = new Map();
   let misses = 0;
+  let rateLimited = false;
 
-  console.info(`Found ${rows.length} One Piece rows and ${cardIds.length} unique card numbers.`);
+  console.info(`Found ${rows.length} One Piece rows.`);
+  console.info(`Checking ${cardIds.length}/${allCardIds.length} unique card numbers after filters.`);
 
   for (const [index, cardId] of cardIds.entries()) {
     try {
@@ -280,6 +335,14 @@ async function syncOnePieceOptcgEnrichment() {
         misses += 1;
       }
     } catch (error) {
+      if (error instanceof OptcgRateLimitError) {
+        rateLimited = true;
+        console.warn(
+          `OPTCG rate limit reached at ${cardId}. Retry after ${error.retryAfterSeconds ?? "unknown"} seconds. Stopping this run.`,
+        );
+        break;
+      }
+
       misses += 1;
       console.warn(`Could not enrich ${cardId}: ${error.message}`);
     }
@@ -306,6 +369,10 @@ async function syncOnePieceOptcgEnrichment() {
 
   const updated = await updateRows(rows, enrichmentByCardId);
   console.info(`${dryRun ? "Dry run: would update" : "Updated"} ${updated} One Piece rows.`);
+
+  if (rateLimited) {
+    console.info("Run stopped early because OPTCG throttled requests. Already matched rows were still processed.");
+  }
 }
 
 syncOnePieceOptcgEnrichment().catch((error) => {
