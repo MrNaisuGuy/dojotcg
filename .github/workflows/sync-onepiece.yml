@@ -1,9 +1,9 @@
-name: Sync Pokemon Cards
+name: Sync One Piece Cards
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: "5 14 * * 4"
+    - cron: "25 14 * * 1"
 
 jobs:
   sync-cards:
@@ -26,7 +26,10 @@ jobs:
 
       - name: Run sync script
         working-directory: frontend
-        run: npm run sync:pokemon
+        run: npm run sync:onepiece
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ONEPIECE_SYNC_PROVIDER: official
+          ONEPIECE_SYNC_REQUEST_DELAY_MS: 750
+          ONEPIECE_SYNC_REQUEST_TIMEOUT_MS: 60000

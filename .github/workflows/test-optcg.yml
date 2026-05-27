@@ -1,0 +1,17 @@
+name: Test OPTCG Reachability
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-optcg:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Test DNS and HTTPS
+        run: |
+          getent hosts optcgapi.com || true
+          curl -v -L --connect-timeout 25 --max-time 40 \
+            -H "Accept: application/json" \
+            -A "DojoTCG/0.0.1" \
+            "https://optcgapi.com/api/sets/card/OP01-001/?format=json"
