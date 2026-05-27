@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "sync:pokemon": "node scripts/sync-pokemon-cards.js",
     "sync:onepiece": "node scripts/sync-onepiece-cards.js",
+    "sync:onepiece-optcg": "node scripts/sync-onepiece-optcg-enrichment.js",
     "backfill:onepiece-source": "node scripts/backfill-onepiece-source.js"
   },
   "dependencies": {

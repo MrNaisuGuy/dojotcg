@@ -564,9 +564,9 @@ async function fetchOnePieceImage(candidate) {
   if (!cardId) return null;
 
   const endpoints = [
-    `https://optcgapi.com/api/sets/card/${cardId}/`,
-    `https://optcgapi.com/api/decks/card/${cardId}/`,
-    `https://optcgapi.com/api/promos/card/${cardId}/`,
+    `https://optcgapi.com/api/sets/card/${cardId}/?format=json`,
+    `https://optcgapi.com/api/decks/card/${cardId}/?format=json`,
+    `https://optcgapi.com/api/promos/card/${cardId}/?format=json`,
   ];
 
   for (const endpoint of endpoints) {
