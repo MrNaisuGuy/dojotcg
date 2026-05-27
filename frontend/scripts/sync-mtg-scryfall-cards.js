@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
-import { createWriteStream } from "node:fs";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { createReadStream, createWriteStream } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
@@ -20,6 +20,8 @@ const existingPageSize = Number(process.env.MTG_SYNC_EXISTING_PAGE_SIZE || 1000)
 const maxCards = Number(process.env.MTG_SYNC_MAX_CARDS || 0);
 const dryRun = process.env.MTG_SYNC_DRY_RUN === "true";
 const bulkType = process.env.MTG_SYNC_BULK_TYPE || "default_cards";
+
+class StopParsing extends Error {}
 
 if (!supabaseUrl || !serviceRoleKey) {
   console.error("Missing SUPABASE_URL/VITE_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.");
@@ -99,7 +101,6 @@ function getRowSignature(row) {
     price_usd: row.price_usd,
     price_source: row.price_source,
     price_variant: row.price_variant,
-    price_updated_at: row.price_updated_at,
   });
 }
 
@@ -174,7 +175,7 @@ async function loadExistingMtgSignatures() {
 }
 
 async function upsertRows(rows) {
-  if (dryRun) return;
+  if (rows.length === 0 || dryRun) return;
 
   for (let index = 0; index < rows.length; index += batchSize) {
     const batch = rows.slice(index, index + batchSize);
@@ -184,6 +185,61 @@ async function upsertRows(rows) {
 
     if (error) throw error;
   }
+}
+
+async function parseBulkCards(filePath, onCard) {
+  const stream = createReadStream(filePath, { encoding: "utf8" });
+  let buffer = "";
+  let depth = 0;
+  let inString = false;
+  let escapeNext = false;
+  let parsed = 0;
+
+  for await (const chunk of stream) {
+    for (const char of chunk) {
+      if (depth === 0) {
+        if (char === "{") {
+          buffer = "{";
+          depth = 1;
+        }
+
+        continue;
+      }
+
+      buffer += char;
+
+      if (escapeNext) {
+        escapeNext = false;
+        continue;
+      }
+
+      if (char === "\\") {
+        escapeNext = true;
+        continue;
+      }
+
+      if (char === '"') {
+        inString = !inString;
+        continue;
+      }
+
+      if (inString) continue;
+
+      if (char === "{") {
+        depth += 1;
+      } else if (char === "}") {
+        depth -= 1;
+
+        if (depth === 0) {
+          parsed += 1;
+          await onCard(JSON.parse(buffer), parsed);
+          buffer = "";
+        }
+      }
+    }
+  }
+
+  return parsed;
 }
 
 async function printSyncSummary() {
@@ -224,24 +280,51 @@ async function syncMtgCards() {
 
     console.info(`Downloaded Scryfall bulk data to ${download.filePath}.`);
     const existingSignatures = await loadExistingMtgSignatures();
-    const cards = JSON.parse(await readFile(download.filePath, "utf8"));
-    const limitedCards = maxCards > 0 ? cards.slice(0, maxCards) : cards;
     const changedRows = [];
+    const dryRunSamples = [];
+    let changedCount = 0;
+    let parsedCount = 0;
 
-    for (const card of limitedCards) {
-      const row = normalizeCard(card);
-      const existingSignature = existingSignatures.get(row.external_id);
+    try {
+      parsedCount = await parseBulkCards(download.filePath, async (card, count) => {
+        if (maxCards > 0 && count > maxCards) throw new StopParsing();
 
-      if (existingSignature !== getRowSignature(row)) {
-        changedRows.push(row);
+        const row = normalizeCard(card);
+        const existingSignature = existingSignatures.get(row.external_id);
+
+        if (existingSignature !== getRowSignature(row)) {
+          changedRows.push(row);
+          changedCount += 1;
+
+          if (dryRunSamples.length < 10) {
+            dryRunSamples.push(row);
+          }
+        }
+
+        if (changedRows.length >= batchSize) {
+          await upsertRows(changedRows);
+          changedRows.length = 0;
+        }
+
+        if (count % 10000 === 0) {
+          console.info(`Parsed ${count} MTG cards. ${changedCount} rows are new or changed so far.`);
+        }
+      });
+    } catch (error) {
+      if (!(error instanceof StopParsing)) {
+        throw error;
       }
+
+      parsedCount = maxCards;
     }
 
-    console.info(`Parsed ${limitedCards.length} MTG cards.`);
-    console.info(`${changedRows.length} MTG rows are new or changed.`);
+    const effectiveParsedCount = maxCards > 0 ? Math.min(parsedCount, maxCards) : parsedCount;
+
+    console.info(`Parsed ${effectiveParsedCount} MTG cards.`);
+    console.info(`${changedCount} MTG rows are new or changed.`);
 
     if (dryRun) {
-      console.table(changedRows.slice(0, 10).map((row) => ({
+      console.table(dryRunSamples.map((row) => ({
         external_id: row.external_id,
         name: row.name,
         set_name: row.set_name,
