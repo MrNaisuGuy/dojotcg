@@ -185,6 +185,18 @@ function getCollectorNumberPostgrestFilters(values) {
   ]);
 }
 
+function getOnePieceIdPostgrestFilters(cardId) {
+  if (!cardId) return [];
+
+  const number = cardId.match(/-(\d{3})$/)?.[1];
+
+  return [
+    `external_id.ilike.${cardId}`,
+    `number.ilike.${cardId}`,
+    number ? `number.ilike.${number}` : null,
+  ].filter(Boolean);
+}
+
 function getNamePostgrestFilters(values) {
   return values.flatMap((value) => {
     const name = String(value || "").trim().replace(/[,()]/g, " ");
@@ -214,6 +226,9 @@ function normalizeExtractedCardData(parsed) {
   const set = parsed.setName || parsed.set || parsed.setCode || null;
   const englishName = normalizeExtractedName(parsed.englishNameGuess, collectorNumber);
   const card = normalizeExtractedName(parsed.name || parsed.card, collectorNumber) || englishName;
+  const onePieceCardId = normalizeOnePieceCardId(
+    parsed.cardID || parsed.cardId || collectorNumber || parsed.setCode,
+  );
 
   return {
     ...parsed,
@@ -229,7 +244,7 @@ function normalizeExtractedCardData(parsed) {
     set,
     setName: parsed.setName || null,
     setCode: parsed.setCode || null,
-    cardID: parsed.cardID || parsed.cardId || null,
+    cardID: onePieceCardId || parsed.cardID || parsed.cardId || null,
   };
 }
 
@@ -352,6 +367,14 @@ function getPokemonQueryParts(candidate, { includeSet = false, includeNumber = t
   return parts;
 }
 
+function normalizeOnePieceCardId(value) {
+  const match = String(value || "")
+    .toUpperCase()
+    .match(/\b(?:OP|ST|EB|PRB)\d{2}-\d{3}\b|\bP-\d{3}\b/);
+
+  return match ? match[0] : null;
+}
+
 function getScryfallImageUrl(card) {
   const imageUris = card.image_uris || card.card_faces?.[0]?.image_uris;
   return imageUris?.normal || imageUris?.large || imageUris?.small || null;
@@ -369,8 +392,8 @@ function getOnePieceCardId(candidate) {
   ].filter(Boolean);
 
   for (const value of possibleIds) {
-    const match = String(value).toUpperCase().match(/[A-Z]{1,3}\d{2}-\d{3}/);
-    if (match) return match[0];
+    const cardId = normalizeOnePieceCardId(value);
+    if (cardId) return cardId;
   }
 
   const setCode = String(candidate.set || candidate.id || "")
@@ -602,6 +625,7 @@ function scoreCandidate(cardData, candidate) {
   const reasons = [];
   let score = 0;
 
+  const gameKey = getGameKey(cardData.game);
   const guessedName = normalizeValue(cardData.card);
   const candidateName = normalizeValue(candidate.name);
   const guessedGame = normalizeValue(cardData.game);
@@ -624,6 +648,37 @@ function scoreCandidate(cardData, candidate) {
   const cardConfidence = (cardData.confidenceScores?.card ?? cardData.cardConfidence ?? 50) / 100;
   const collectorNumberConfidence =
     (cardData.confidenceScores?.collectorNumber ?? cardData.collectorNumberConfidence ?? 50) / 100;
+
+  if (gameKey === "onepiece") {
+    const guessedCardId = normalizeOnePieceCardId(
+      cardData.cardID || cardData.cardId || cardData.collectorNumber || cardData.number,
+    );
+    const candidateCardId = normalizeOnePieceCardId(
+      candidate.externalId || candidate.cardID || candidate.cardId || candidate.id || candidate.number,
+    );
+    const guessedCardType = normalizeValue(cardData.cardType);
+    const candidateCardType = normalizeValue(candidate.cardType);
+
+    if (guessedCardId && candidateCardId) {
+      if (guessedCardId === candidateCardId) {
+        score += 70 * collectorNumberConfidence;
+        reasons.push(`OPTCG card id match (${Math.round(collectorNumberConfidence * 100)}% confident)`);
+      } else {
+        score -= 25;
+        reasons.push("OPTCG card id mismatch");
+      }
+    }
+
+    if (guessedCardType && candidateCardType) {
+      if (guessedCardType === candidateCardType) {
+        score += 15;
+        reasons.push("card type match");
+      } else {
+        score -= 8;
+        reasons.push("card type mismatch");
+      }
+    }
+  }
 
   if (guessedGame && candidateGame && candidateGame !== guessedGame) {
     score -= 12;
@@ -735,6 +790,7 @@ function formatSupabaseCardMatch(card, cardData) {
     set: card.set_name,
     setId: card.set_id,
     number: card.number,
+    cardType: card.raw?.card_type || card.raw?.type || card.raw?.cardType || null,
     collectorNumber: cardData.collectorNumber,
     printedTotal: card.printed_total,
     rarity: card.rarity,
@@ -772,6 +828,10 @@ async function findLocalCandidates(cardData) {
   const gameKey = getGameKey(cardData.game);
   const { printedTotal } = parseCollectorNumber(cardData.collectorNumber || cardData.number);
   const numberLookupValues = getCollectorNumberLookupValues(cardData.collectorNumber || cardData.number);
+  const onePieceCardId = gameKey === "onepiece"
+    ? normalizeOnePieceCardId(cardData.cardID || cardData.cardId || cardData.collectorNumber || cardData.number)
+    : null;
+  const onePieceLookupFilters = getOnePieceIdPostgrestFilters(onePieceCardId);
   const targetPrintedTotal = normalizePrintedTotal(cardData.printedTotal) || printedTotal;
   const names = getLocalLookupNames(cardData);
 
@@ -783,9 +843,14 @@ async function findLocalCandidates(cardData) {
     };
   }
 
-  if (numberLookupValues.length > 0) {
+  if (numberLookupValues.length > 0 || onePieceLookupFilters.length > 0) {
+    const lookupFilters = uniqueValues([
+      ...onePieceLookupFilters,
+      ...getCollectorNumberPostgrestFilters(numberLookupValues),
+    ]);
     const queryParts = [
       targetPrintedTotal ? `printed_total=${targetPrintedTotal}` : null,
+      onePieceCardId ? `external_id=${onePieceCardId}` : null,
       `number ~~* (${numberLookupValues.map((value) => `${value}/%`).join(", ")})`,
       names.length > 0 ? `name rank (${names.join(", ")})` : null,
       gameKey ? `game rank=${gameKey}` : null,
@@ -793,10 +858,10 @@ async function findLocalCandidates(cardData) {
     let query = supabase
       .from("cards")
       .select("id,external_id,game,name,set_name,set_id,number,printed_total,rarity,image_url,price_usd,price_source,price_variant,price_updated_at,raw")
-      .or(getCollectorNumberPostgrestFilters(numberLookupValues).join(","))
+      .or(lookupFilters.join(","))
       .limit(25);
 
-    if (targetPrintedTotal) {
+    if (targetPrintedTotal && gameKey !== "onepiece") {
       query = query.eq("printed_total", targetPrintedTotal);
     }
 
@@ -874,6 +939,7 @@ function formatJustTcgMatch(card, cardData) {
     game: card.game,
     set: card.set_name || card.set,
     number: card.number,
+    cardType: card.type || card.card_type || card.cardType || cardData.cardType || null,
     cardID: cardData.cardID,
     collectorNumber: cardData.collectorNumber,
     printedTotal: cardData.printedTotal,
@@ -1027,14 +1093,19 @@ Prioritize exact text and printed identifiers:
    - Do not translate attack names or ability names as the card name.
    - Prefer the Pokemon species/card title printed at the top.
    - Return null for englishNameGuess if uncertain.
-5. Read the collector/card number exactly as printed for all games.
+5. For One Piece cards, inspect the bottom-right corner first and prioritize these fields in this order:
+   - Exact card ID, usually printed like "OP02-025", "ST10-003", "EB01-001", "PRB01-001", or "P-001".
+   - Exact card type/category, such as Leader, Character, Event, or Stage.
+   - Exact card name.
+   Return the One Piece card ID in both collectorNumber and cardID when readable. Do not infer a One Piece ID from the name alone.
+6. Read the collector/card number exactly as printed for all games.
    - If fraction card number is top number and printed total is bottom number.
    - Collector number can be the fraction or following examples.
    - Pokemon examples: "25/102", "SVP 001", "TG05/TG30" 
    - Magic examples: "123/281", "123", "123★"
    - One Piece examples: "OP01-001", "ST10-003", "P-001"
-6. Read any set code, set name, set symbol text, printed total, language, rarity, foil/treatment, copyright year, and useful visible text fragments.
-7. Confidence scores should describe readability, not whether a database match exists.
+7. Read any set code, set name, set symbol text, printed total, language, rarity, foil/treatment, copyright year, and useful visible text fragments.
+8. Confidence scores should describe readability, not whether a database match exists.
 
 Return JSON only with this exact shape:
 {

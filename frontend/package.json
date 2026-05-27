@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "sync:pokemon": "node scripts/sync-pokemon-cards.js"
+    "sync:pokemon": "node scripts/sync-pokemon-cards.js",
+    "sync:onepiece": "node scripts/sync-onepiece-cards.js",
+    "backfill:onepiece-source": "node scripts/backfill-onepiece-source.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.2",
