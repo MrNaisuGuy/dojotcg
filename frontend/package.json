@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "sync:mtg": "node scripts/sync-mtg-scryfall-cards.js",
     "sync:pokemon": "node scripts/sync-pokemon-cards.js",
     "sync:onepiece": "node scripts/sync-onepiece-cards.js",
     "sync:onepiece-optcg": "node scripts/sync-onepiece-optcg-enrichment.js",
