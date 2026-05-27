@@ -474,6 +474,7 @@ function Scan() {
           candidates={result.candidates || result.justtcgMatches}
           error={result.justtcgError}
           searchQuery={result.justtcgSearchQuery}
+          matchTarget={result.matchTarget}
         />
       )}
       

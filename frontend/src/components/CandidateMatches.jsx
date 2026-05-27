@@ -228,7 +228,20 @@ function CandidateCard({ candidate, isBest }) {
   );
 }
 
-function CandidateMatches({ candidates = [], error, searchQuery }) {
+function formatMatchTarget(matchTarget) {
+  if (!matchTarget) return null;
+
+  return [
+    matchTarget.printedTotal || "unknown",
+    matchTarget.number || "unknown",
+    matchTarget.name || "unknown",
+    matchTarget.game || "unknown",
+  ].join(" | ");
+}
+
+function CandidateMatches({ candidates = [], error, searchQuery, matchTarget }) {
+  const matchTargetText = formatMatchTarget(matchTarget);
+
   return (
     <section style={{ marginTop: "2rem", maxWidth: "760px", marginInline: "auto", color: "#d4d4d4" }}>
       {searchQuery && (
@@ -244,7 +257,14 @@ function CandidateMatches({ candidates = [], error, searchQuery }) {
       )}
 
       {!error && candidates.length === 0 && (
-        <p>No candidates found.</p>
+        <div style={{ textAlign: "left" }}>
+          <p>No candidates found.</p>
+          {matchTargetText && (
+            <p style={{ color: "#a6a6a6", fontSize: "0.85rem", lineHeight: 1.5 }}>
+              Trying to match: {matchTargetText}
+            </p>
+          )}
+        </div>
       )}
 
       <div

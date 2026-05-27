@@ -104,10 +104,24 @@ function normalizeValue(value) {
 }
 
 function normalizeNumber(value) {
-  return String(value || "")
+  const raw = String(value || "")
     .toLowerCase()
-    .replace(/^0+/, "")
-    .trim();
+    .trim()
+    .replace(/^#\s*/, "");
+  const [base, ...rest] = raw.split("/");
+  const normalizedBase = base
+    .replace(/[^a-z0-9]+/g, "")
+    .replace(/^0+(?=\d)/, "");
+  const normalizedRest = rest.join("/").trim();
+
+  return normalizedRest ? `${normalizedBase}/${normalizedRest}` : normalizedBase;
+}
+
+function normalizePrintedTotal(value) {
+  const normalized = normalizeNumber(value);
+  const match = normalized.match(/\d+/);
+
+  return match ? Number(match[0]) : null;
 }
 
 function uniqueValues(values) {
@@ -125,9 +139,16 @@ function compactQuery(parts) {
 function getCollectorNumberCandidates(value) {
   const raw = String(value || "").trim();
   const beforeSlash = raw.split("/")[0]?.trim();
-  const withoutLeadingZeroes = beforeSlash?.replace(/^0+/, "") || beforeSlash;
+  const normalized = normalizeNumber(beforeSlash || raw);
+  const paddedMatch = normalized?.match(/^(\d+)([a-z]?)$/i);
+  const paddedValues = paddedMatch
+    ? [
+        `${paddedMatch[1].padStart(2, "0")}${paddedMatch[2]}`,
+        `${paddedMatch[1].padStart(3, "0")}${paddedMatch[2]}`,
+      ]
+    : [];
 
-  return uniqueValues([raw, beforeSlash, withoutLeadingZeroes]);
+  return uniqueValues([raw, beforeSlash, normalized, ...paddedValues]);
 }
 
 function parseCollectorNumber(value) {
@@ -139,8 +160,29 @@ function parseCollectorNumber(value) {
   return {
     number,
     normalizedNumber: normalizeNumber(number),
-    printedTotal: printedTotal ? Number(printedTotal) : null,
+    printedTotal: normalizePrintedTotal(printedTotal),
   };
+}
+
+function getCollectorNumberLookupValues(value) {
+  const { number, normalizedNumber } = parseCollectorNumber(value);
+  const lookupValues = [number, normalizedNumber];
+  const paddedMatch = normalizedNumber?.match(/^(\d+)([a-z]?)$/i);
+
+  if (paddedMatch) {
+    const [, digits, suffix] = paddedMatch;
+    lookupValues.push(`${digits.padStart(2, "0")}${suffix}`);
+    lookupValues.push(`${digits.padStart(3, "0")}${suffix}`);
+  }
+
+  return uniqueValues(lookupValues);
+}
+
+function getCollectorNumberPostgrestFilters(values) {
+  return values.flatMap((value) => [
+    `number.eq.${value}`,
+    `number.like.${value}/%`,
+  ]);
 }
 
 function normalizeExtractedName(value, collectorNumber) {
@@ -192,15 +234,18 @@ function buildJustTcgQueries(cardData) {
   const collectorNumber = cardData.collectorNumber || cardData.number;
   const cardID = cardData.cardID || cardData.cardId;
   const { number, printedTotal } = parseCollectorNumber(collectorNumber);
-  const total = cardData.printedTotal || printedTotal;
+  const numberLookupValues = getCollectorNumberLookupValues(collectorNumber);
+  const total = normalizePrintedTotal(cardData.printedTotal) || printedTotal;
   const setCandidates = getSetCandidates(cardData);
   const visibleText = Array.isArray(cardData.visibleText) ? cardData.visibleText : [];
   const usefulVisibleText = visibleText
     .filter((text) => normalizeValue(text).length >= 4)
     .slice(0, 3);
   const setNameQueries = setCandidates.flatMap((setValue) => [
-    compactQuery([setValue, name, number, total]),
-    compactQuery([setValue, name, number]),
+    ...numberLookupValues.flatMap((lookupNumber) => [
+      compactQuery([setValue, name, lookupNumber, total]),
+      compactQuery([setValue, name, lookupNumber]),
+    ]),
     compactQuery([setValue, name, collectorNumber]),
     compactQuery([setValue, name]),
   ]);
@@ -213,6 +258,8 @@ function buildJustTcgQueries(cardData) {
     cardID,
     compactQuery([name, cardID]),
     compactQuery([collectorNumber, total]),
+    ...numberLookupValues.map((lookupNumber) => compactQuery([name, lookupNumber, total])),
+    ...numberLookupValues.map((lookupNumber) => compactQuery([name, lookupNumber])),
     name,
     ...usefulVisibleText.map((text) => compactQuery([name, text])),
   ]).slice(0, JUSTTCG_QUERY_LIMIT);
@@ -283,7 +330,7 @@ function getPokemonQueryParts(candidate, { includeSet = false, includeNumber = t
   }
 
   if (includeNumber) {
-    const { number } = parseCollectorNumber(candidate.number);
+    const number = getCollectorNumberLookupValues(candidate.number)[0];
 
     if (number) {
       parts.push(`number:"${quotePokemonQueryValue(number)}"`);
@@ -343,18 +390,21 @@ async function fetchJson(url, options = {}) {
 }
 
 async function fetchPokemonImage(candidate) {
-  const { number, normalizedNumber, printedTotal } = parseCollectorNumber(
+  const { normalizedNumber, printedTotal } = parseCollectorNumber(
     candidate.number || candidate.collectorNumber,
   );
+  const numberLookupValues = getCollectorNumberLookupValues(candidate.number || candidate.collectorNumber);
   const extractedNumber = parseCollectorNumber(candidate.collectorNumber);
-  const targetPrintedTotal = printedTotal || candidate.printedTotal || extractedNumber.printedTotal;
+  const targetPrintedTotal = printedTotal || normalizePrintedTotal(candidate.printedTotal) || extractedNumber.printedTotal;
 
-  if (!candidate.name || !number || !targetPrintedTotal) return null;
+  if (!candidate.name || numberLookupValues.length === 0 || !targetPrintedTotal) return null;
 
-  const query = `name:"${quotePokemonQueryValue(candidate.name)}" number:"${quotePokemonQueryValue(number)}" set.printedTotal:${Number(targetPrintedTotal)}`;
+  const queries = numberLookupValues.map((lookupNumber) => (
+    `name:"${quotePokemonQueryValue(candidate.name)}" number:"${quotePokemonQueryValue(lookupNumber)}" set.printedTotal:${Number(targetPrintedTotal)}`
+  ));
   const debug = {
     provider: "pokemontcg.io",
-    query,
+    query: queries.join(" | "),
     candidateName: candidate.name,
     candidateSet: candidate.set,
     candidateNumber: candidate.number,
@@ -370,16 +420,23 @@ async function fetchPokemonImage(candidate) {
     headers["X-Api-Key"] = process.env.POKEMONTCG_API_KEY;
   }
 
-  const searchParams = new URLSearchParams({
-    q: query,
-    pageSize: "10",
-    select: "id,name,number,set,images",
-  });
-  const body = await fetchJson(
-    `https://api.pokemontcg.io/v2/cards?${searchParams.toString()}`,
-    { headers },
-  );
-  const cards = Array.isArray(body?.data) ? body.data : [];
+  let cards = [];
+
+  for (const query of queries) {
+    const searchParams = new URLSearchParams({
+      q: query,
+      pageSize: "10",
+      select: "id,name,number,set,images",
+    });
+    const body = await fetchJson(
+      `https://api.pokemontcg.io/v2/cards?${searchParams.toString()}`,
+      { headers },
+    );
+    cards = Array.isArray(body?.data) ? body.data : [];
+
+    if (cards.length > 0) break;
+  }
+
   debug.resultCount = cards.length;
   const rankedCards = cards
     .map((card) => {
@@ -387,7 +444,7 @@ async function fetchPokemonImage(candidate) {
       const numberMatches = normalizedNumber && normalizeNumber(card.number) === normalizedNumber;
       const nameMatches = candidate.name && normalizeValue(card.name) === normalizeValue(candidate.name);
       const nameContains = candidate.name && normalizeValue(card.name).includes(normalizeValue(candidate.name));
-      const printedTotalMatches = card.set?.printedTotal === Number(targetPrintedTotal);
+      const printedTotalMatches = normalizePrintedTotal(card.set?.printedTotal) === targetPrintedTotal;
 
       if (numberMatches) score += 50;
       if (printedTotalMatches) score += 40;
@@ -549,7 +606,9 @@ function scoreCandidate(cardData, candidate) {
   const candidateNumber = normalizeNumber(candidate.number);
   const parsedGuessedNumber = parseCollectorNumber(cardData.collectorNumber || cardData.number);
   const parsedCandidateNumber = parseCollectorNumber(candidate.number);
-  const guessedPrintedTotal = cardData.printedTotal || parsedGuessedNumber.printedTotal;
+  const guessedPrintedTotal = normalizePrintedTotal(cardData.printedTotal) || parsedGuessedNumber.printedTotal;
+  const candidatePrintedTotal =
+    normalizePrintedTotal(candidate.printedTotal) || parsedCandidateNumber.printedTotal;
 
   // Get OpenAI confidence scores (0-100), default to 50 if not provided
   const gameConfidence = (cardData.confidenceScores?.game ?? cardData.gameConfidence ?? 50) / 100;
@@ -558,32 +617,30 @@ function scoreCandidate(cardData, candidate) {
   const collectorNumberConfidence =
     (cardData.confidenceScores?.collectorNumber ?? cardData.collectorNumberConfidence ?? 50) / 100;
 
-  // CRITICAL: Game mismatch is a hard penalty
   if (guessedGame && candidateGame && candidateGame !== guessedGame) {
-    score -= 50;
+    score -= 12;
     reasons.push("game mismatch");
   } else if (guessedGame && candidateGame && candidateGame === guessedGame) {
-    // Boost game match using OpenAI's game confidence
-    score += 20 * gameConfidence;
+    score += 10 * gameConfidence;
     reasons.push(`game match (${Math.round(gameConfidence * 100)}% confident)`);
   }
 
   // Set matching with confidence weighting
   if (guessedSet && candidateSet) {
     if (candidateSet.includes(guessedSet) || guessedSet.includes(candidateSet)) {
-      score += 20 * setConfidence;
+      score += 8 * setConfidence;
       reasons.push(`set match (${Math.round(setConfidence * 100)}% confident)`);
     }
   }
 
   if (guessedSetCode && candidateSet && candidateSet.includes(guessedSetCode)) {
-    score += 22 * setConfidence;
+    score += 8 * setConfidence;
     reasons.push(`set code match (${Math.round(setConfidence * 100)}% confident)`);
   }
 
   if (guessedSetName && candidateSet) {
     if (candidateSet.includes(guessedSetName) || guessedSetName.includes(candidateSet)) {
-      score += 18 * setConfidence;
+      score += 6 * setConfidence;
       reasons.push(`set name match (${Math.round(setConfidence * 100)}% confident)`);
     }
   }
@@ -591,33 +648,33 @@ function scoreCandidate(cardData, candidate) {
   // Name matching with confidence weighting
   if (guessedName && candidateName) {
     if (candidateName === guessedName) {
-      score += 50 * cardConfidence;
+      score += 25 * cardConfidence;
       reasons.push(`exact name (${Math.round(cardConfidence * 100)}% confident)`);
     } else if (candidateName.includes(guessedName) || guessedName.includes(candidateName)) {
-      score += 35 * cardConfidence;
+      score += 16 * cardConfidence;
       reasons.push(`similar name (${Math.round(cardConfidence * 100)}% confident)`);
     }
   }
 
   // Collector number matching
   if (guessedNumber && candidateNumber && candidateNumber === guessedNumber) {
-    score += 40 * collectorNumberConfidence;
+    score += 35 * collectorNumberConfidence;
     reasons.push(`collector number match (${Math.round(collectorNumberConfidence * 100)}% confident)`);
   } else if (
     parsedGuessedNumber.normalizedNumber &&
     parsedCandidateNumber.normalizedNumber &&
     parsedCandidateNumber.normalizedNumber === parsedGuessedNumber.normalizedNumber
   ) {
-    score += 32 * collectorNumberConfidence;
+    score += 30 * collectorNumberConfidence;
     reasons.push(`collector number base match (${Math.round(collectorNumberConfidence * 100)}% confident)`);
   }
 
   if (
     guessedPrintedTotal &&
-    parsedCandidateNumber.printedTotal &&
-    Number(guessedPrintedTotal) === parsedCandidateNumber.printedTotal
+    candidatePrintedTotal &&
+    guessedPrintedTotal === candidatePrintedTotal
   ) {
-    score += 10;
+    score += 45;
     reasons.push("printed total match");
   }
 
@@ -626,14 +683,14 @@ function scoreCandidate(cardData, candidate) {
     const guessedRarity = normalizeValue(cardData.rarity);
     const candidateRarity = normalizeValue(candidate.rarity);
     if (guessedRarity === candidateRarity) {
-      score += 15;
+      score += 5;
       reasons.push("rarity match");
     }
   }
 
   // Bonus for multiple strong matches
   if (reasons.filter((r) => r.includes("match")).length >= 3) {
-    score += 10;
+    score += 5;
     reasons.push("multi-field match bonus");
   }
 
@@ -645,6 +702,18 @@ function scoreCandidate(cardData, candidate) {
 
 function getLocalLookupNames(cardData) {
   return uniqueValues([cardData.englishNameGuess, cardData.card, cardData.name]);
+}
+
+function getMatchTarget(cardData) {
+  const { printedTotal } = parseCollectorNumber(cardData.collectorNumber || cardData.number);
+  const numberLookupValues = getCollectorNumberLookupValues(cardData.collectorNumber || cardData.number);
+
+  return {
+    printedTotal: normalizePrintedTotal(cardData.printedTotal) || printedTotal || null,
+    number: numberLookupValues.join(", ") || null,
+    name: getLocalLookupNames(cardData).join(", ") || null,
+    game: getGameKey(cardData.game) || normalizeValue(cardData.game) || null,
+  };
 }
 
 function formatSupabaseCardMatch(card, cardData) {
@@ -691,50 +760,96 @@ function formatSupabaseCardMatch(card, cardData) {
 
 async function findLocalCandidates(cardData) {
   const supabase = getSupabaseServerClient();
+  const matchTarget = getMatchTarget(cardData);
   const gameKey = getGameKey(cardData.game);
-  const { number, printedTotal } = parseCollectorNumber(cardData.collectorNumber || cardData.number);
-  const targetPrintedTotal = cardData.printedTotal || printedTotal;
+  const { printedTotal } = parseCollectorNumber(cardData.collectorNumber || cardData.number);
+  const numberLookupValues = getCollectorNumberLookupValues(cardData.collectorNumber || cardData.number);
+  const targetPrintedTotal = normalizePrintedTotal(cardData.printedTotal) || printedTotal;
   const names = getLocalLookupNames(cardData);
 
-  if (!supabase || !gameKey || names.length === 0 || !number) {
+  if (!supabase) {
     return {
       candidates: [],
       searchQuery: null,
+      matchTarget,
     };
   }
 
-  const queryParts = [
-    `game=${gameKey}`,
-    `name in (${names.join(", ")})`,
-    `number=${number}`,
-    targetPrintedTotal ? `printed_total=${targetPrintedTotal}` : null,
-  ].filter(Boolean);
-  let query = supabase
+  if (numberLookupValues.length > 0) {
+    const queryParts = [
+      targetPrintedTotal ? `printed_total=${targetPrintedTotal}` : null,
+      `number ~~ (${numberLookupValues.map((value) => `${value}/%`).join(", ")})`,
+      names.length > 0 ? `name rank (${names.join(", ")})` : null,
+      gameKey ? `game rank=${gameKey}` : null,
+    ].filter(Boolean);
+    let query = supabase
+      .from("cards")
+      .select("id,external_id,game,name,set_name,set_id,number,printed_total,rarity,image_url,price_usd,price_source,price_variant,price_updated_at,raw")
+      .or(getCollectorNumberPostgrestFilters(numberLookupValues).join(","))
+      .limit(25);
+
+    if (targetPrintedTotal) {
+      query = query.eq("printed_total", targetPrintedTotal);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      throw error;
+    }
+
+    const candidates = (data || [])
+      .map((card) => formatSupabaseCardMatch(card, cardData))
+      .sort((a, b) => b.matchScore - a.matchScore)
+      .slice(0, 5);
+
+    if (candidates.length > 0) {
+      return {
+        candidates,
+        searchQuery: queryParts.join(" | "),
+        matchTarget,
+      };
+    }
+  }
+
+  if (names.length === 0) {
+    return {
+      candidates: [],
+      searchQuery: null,
+      matchTarget,
+    };
+  }
+
+  let fallbackQuery = supabase
     .from("cards")
     .select("id,external_id,game,name,set_name,set_id,number,printed_total,rarity,image_url,price_usd,price_source,price_variant,price_updated_at,raw")
-    .eq("game", gameKey)
     .in("name", names)
-    .eq("number", number)
-    .limit(10);
+    .limit(25);
 
-  if (targetPrintedTotal) {
-    query = query.eq("printed_total", Number(targetPrintedTotal));
+  if (gameKey && gameKey !== "unknown") {
+    fallbackQuery = fallbackQuery.eq("game", gameKey);
   }
 
-  const { data, error } = await query;
+  const { data: fallbackData, error: fallbackError } = await fallbackQuery;
 
-  if (error) {
-    throw error;
+  if (fallbackError) {
+    throw fallbackError;
   }
 
-  const candidates = (data || [])
+  const fallbackCandidates = (fallbackData || [])
     .map((card) => formatSupabaseCardMatch(card, cardData))
     .sort((a, b) => b.matchScore - a.matchScore)
-    .slice(0, 5);
+    .slice(0, 3);
 
   return {
-    candidates,
-    searchQuery: queryParts.join(" | "),
+    candidates: fallbackCandidates,
+    searchQuery: [
+      targetPrintedTotal ? `printed_total=${targetPrintedTotal}` : null,
+      numberLookupValues.length > 0 ? `number ~~ (${numberLookupValues.map((value) => `${value}/%`).join(", ")})` : "number unavailable",
+      `fallback name in (${names.join(", ")})`,
+      gameKey && gameKey !== "unknown" ? `fallback game=${gameKey}` : null,
+    ].filter(Boolean).join(" | "),
+    matchTarget,
   };
 }
 
@@ -809,6 +924,7 @@ async function findCandidates(cardData) {
     return {
       candidates: [],
       searchQuery: null,
+      matchTarget: localResult.matchTarget,
     };
   }
 
@@ -849,6 +965,7 @@ async function findCandidates(cardData) {
   return {
     candidates: await enrichCandidatesWithImages(candidates),
     searchQuery: successfulResults.map((result) => result.query).join(" | "),
+    matchTarget: localResult.matchTarget,
   };
 }
 
@@ -955,12 +1072,14 @@ Use numbers from 0 to 100 for confidence fields. Keep visibleText short and only
     const parsed = normalizeExtractedCardData(parseJsonResponse(rawText));
     let candidates = [];
     let justtcgSearchQuery = null;
+    let matchTarget = getMatchTarget(parsed);
     let justtcgError = null;
 
     try {
       const candidateResult = await findCandidates(parsed);
       candidates = candidateResult.candidates;
       justtcgSearchQuery = candidateResult.searchQuery;
+      matchTarget = candidateResult.matchTarget || matchTarget;
     } catch (error) {
       console.error(error);
       justtcgError = error.message;
@@ -1008,6 +1127,7 @@ Use numbers from 0 to 100 for confidence fields. Keep visibleText short and only
       candidates,
       justtcgMatches: candidates,
       justtcgSearchQuery,
+      matchTarget,
       justtcgError,
       raw: rawText,
     });
