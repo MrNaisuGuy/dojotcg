@@ -180,9 +180,17 @@ function getCollectorNumberLookupValues(value) {
 
 function getCollectorNumberPostgrestFilters(values) {
   return values.flatMap((value) => [
-    `number.eq.${value}`,
-    `number.like.${value}/%`,
+    `number.ilike.${value}`,
+    `number.ilike.${value}/%`,
   ]);
+}
+
+function getNamePostgrestFilters(values) {
+  return values.flatMap((value) => {
+    const name = String(value || "").trim().replace(/[,()]/g, " ");
+
+    return name ? [`name.ilike.${name}`, `name.ilike.*${name}*`] : [];
+  });
 }
 
 function normalizeExtractedName(value, collectorNumber) {
@@ -778,7 +786,7 @@ async function findLocalCandidates(cardData) {
   if (numberLookupValues.length > 0) {
     const queryParts = [
       targetPrintedTotal ? `printed_total=${targetPrintedTotal}` : null,
-      `number ~~ (${numberLookupValues.map((value) => `${value}/%`).join(", ")})`,
+      `number ~~* (${numberLookupValues.map((value) => `${value}/%`).join(", ")})`,
       names.length > 0 ? `name rank (${names.join(", ")})` : null,
       gameKey ? `game rank=${gameKey}` : null,
     ].filter(Boolean);
@@ -823,7 +831,7 @@ async function findLocalCandidates(cardData) {
   let fallbackQuery = supabase
     .from("cards")
     .select("id,external_id,game,name,set_name,set_id,number,printed_total,rarity,image_url,price_usd,price_source,price_variant,price_updated_at,raw")
-    .in("name", names)
+    .or(getNamePostgrestFilters(names).join(","))
     .limit(25);
 
   if (gameKey && gameKey !== "unknown") {
@@ -845,8 +853,8 @@ async function findLocalCandidates(cardData) {
     candidates: fallbackCandidates,
     searchQuery: [
       targetPrintedTotal ? `printed_total=${targetPrintedTotal}` : null,
-      numberLookupValues.length > 0 ? `number ~~ (${numberLookupValues.map((value) => `${value}/%`).join(", ")})` : "number unavailable",
-      `fallback name in (${names.join(", ")})`,
+      numberLookupValues.length > 0 ? `number ~~* (${numberLookupValues.map((value) => `${value}/%`).join(", ")})` : "number unavailable",
+      `fallback name ~~* (${names.join(", ")})`,
       gameKey && gameKey !== "unknown" ? `fallback game=${gameKey}` : null,
     ].filter(Boolean).join(" | "),
     matchTarget,
