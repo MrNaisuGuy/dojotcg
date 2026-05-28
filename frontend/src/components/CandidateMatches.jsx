@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 
 function formatPrice(price) {
-  return typeof price === "number" ? `$${price.toFixed(2)}` : "No price";
+  return typeof price === "number" && price > 0 ? `$${price.toFixed(2)}` : "No price";
 }
 
 function getRegionalPrices(candidate) {
@@ -16,6 +16,33 @@ function getRegionalPrices(candidate) {
   }
 
   return prices;
+}
+
+function getPriceFreshnessText(candidate, regionalPrices) {
+  const basePrice = candidate.lowestPrice ?? regionalPrices?.basePrice ?? regionalPrices?.us;
+
+  if (typeof basePrice !== "number" || basePrice <= 0) {
+    return "No price data";
+  }
+
+  if (!candidate.priceUpdatedAt) {
+    return "Price data age unavailable";
+  }
+
+  const updatedAt = new Date(candidate.priceUpdatedAt);
+
+  if (Number.isNaN(updatedAt.getTime())) {
+    return "Price data age unavailable";
+  }
+
+  const elapsedMs = Date.now() - updatedAt.getTime();
+  const elapsedDays = Math.floor(elapsedMs / (24 * 60 * 60 * 1000));
+
+  if (elapsedDays < 1) {
+    return "Price data is less than a day old";
+  }
+
+  return `Price data is ${elapsedDays} ${elapsedDays === 1 ? "day" : "days"} old`;
 }
 
 function hasMatchReason(candidate, pattern) {
@@ -79,6 +106,7 @@ function PriceRow({ countryCode, label, value }) {
 function CandidateCard({ candidate, isBest }) {
   const [showDetails, setShowDetails] = useState(false);
   const regionalPrices = getRegionalPrices(candidate);
+  const priceFreshnessText = getPriceFreshnessText(candidate, regionalPrices);
   const score = typeof candidate.matchScore === "number" ? candidate.matchScore : 0;
   const cardNameMatched = hasMatchReason(candidate, /exact name|similar name/i);
   const setMatched = hasMatchReason(candidate, /set/i);
@@ -175,6 +203,17 @@ function CandidateCard({ candidate, isBest }) {
         <MatchCheck label="Rarity" matched={rarityMatched} />
       </div>
 
+      <p
+        style={{
+          margin: "0.8rem 0 0",
+          color: priceFreshnessText === "No price data" ? "#fca5a5" : "#a6a6a6",
+          fontSize: "0.78rem",
+          textAlign: "center",
+        }}
+      >
+        {priceFreshnessText}
+      </p>
+
       <div
         style={{
           display: "flex",
@@ -239,8 +278,44 @@ function formatMatchTarget(matchTarget) {
   ].join(" | ");
 }
 
+function normalizeCandidateKeyPart(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function getCandidateDisplayKey(candidate) {
+  if (candidate.id) return `id:${candidate.id}`;
+  if (candidate.externalId) return `external_id:${normalizeCandidateKeyPart(candidate.externalId)}`;
+
+  const game = normalizeCandidateKeyPart(candidate.game);
+  const setId = normalizeCandidateKeyPart(candidate.setId);
+  const number = normalizeCandidateKeyPart(candidate.number);
+  const language = normalizeCandidateKeyPart(candidate.language || "unknown");
+  const name = normalizeCandidateKeyPart(candidate.name);
+
+  if (game && setId && number) return `game_set_number_language:${game}:${setId}:${number}:${language}`;
+  if (game && name && setId && number) return `game_name_set_number:${game}:${name}:${setId}:${number}`;
+
+  return `fallback:${game}:${name}:${number}`;
+}
+
+function dedupeDisplayCandidates(candidates) {
+  const seen = new Set();
+
+  return candidates.filter((candidate) => {
+    const key = getCandidateDisplayKey(candidate);
+
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function CandidateMatches({ candidates = [], error, searchQuery, matchTarget }) {
   const matchTargetText = formatMatchTarget(matchTarget);
+  const displayCandidates = dedupeDisplayCandidates(candidates);
 
   return (
     <section style={{ marginTop: "2rem", maxWidth: "760px", marginInline: "auto", color: "#d4d4d4" }}>
@@ -256,7 +331,7 @@ function CandidateMatches({ candidates = [], error, searchQuery, matchTarget }) 
         </p>
       )}
 
-      {!error && candidates.length === 0 && (
+      {!error && displayCandidates.length === 0 && (
         <div style={{ textAlign: "left" }}>
           <p>No candidates found.</p>
           {matchTargetText && (
@@ -275,8 +350,8 @@ function CandidateMatches({ candidates = [], error, searchQuery, matchTarget }) 
           alignItems: "start",
         }}
       >
-        {candidates.map((candidate, index) => (
-          <CandidateCard key={candidate.id} candidate={candidate} isBest={index === 0} />
+        {displayCandidates.map((candidate, index) => (
+          <CandidateCard key={getCandidateDisplayKey(candidate)} candidate={candidate} isBest={index === 0} />
         ))}
       </div>
     </section>

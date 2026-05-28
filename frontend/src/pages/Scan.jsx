@@ -3,9 +3,9 @@ import { Link } from "react-router-dom";
 import { analyzeCard } from "../services/cardServices.js";
 import CandidateMatches from "../components/CandidateMatches.jsx";
 import CardCarousel from "../components/CardCarousel.jsx";
-import mtg from "../assets/mtg.png";
-import pokemon from "../assets/pokemon.png";
-import onepiece from "../assets/onepiece.png";
+import mtg from "../assets/mtg_carousel.webp";
+import pokemon from "../assets/pokemon_carousel.webp";
+import onepiece from "../assets/onepiece_carousel.webp";
 
 const maxImageSize = 1600;
 const imageQuality = 0.82;
@@ -471,9 +471,9 @@ function Scan() {
       
       {showResult && result && (
         <CandidateMatches
-          candidates={result.candidates || result.justtcgMatches}
-          error={result.justtcgError}
-          searchQuery={result.justtcgSearchQuery}
+          candidates={result.candidates}
+          error={result.candidateError}
+          searchQuery={result.candidateSearchQuery}
           matchTarget={result.matchTarget}
         />
       )}

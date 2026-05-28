@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
-import pokemon from "../assets/pokemon.png";
-import mtg from "../assets/mtg.png";
-import onepiece from "../assets/onepiece.png";
+import mtg from "../assets/mtg_carousel.webp";
+import pokemon from "../assets/pokemon_carousel.webp";
+import onepiece from "../assets/onepiece_carousel.webp";
 
 const defaultResourceLinkStyle = {
   display: "flex",

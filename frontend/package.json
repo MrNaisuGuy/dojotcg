@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test": "node --test api/*.test.js",
     "preview": "vite preview",
     "sync:mtg": "node scripts/sync-mtg-scryfall-cards.js",
     "sync:pokemon": "node scripts/sync-pokemon-cards.js",
@@ -23,6 +24,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.15.1",
+    "sharp": "^0.34.5",
     "tailwindcss": "^4.3.0"
   },
   "devDependencies": {
