@@ -20,7 +20,7 @@ export function buildMatchContext(cardData) {
     normalizedName: normalizeValue(cardData.card),
     normalizedGame: normalizeValue(cardData.game),
     normalizedSet: normalizeValue(cardData.set),
-    normalizedSetId: normalizeValue(cardData.setId || cardData.set_id || cardData.setCode),
+    normalizedSetId: normalizeValue(cardData.setId || cardData.set_id),
     normalizedSetCode: normalizeValue(cardData.setCode),
     normalizedSetName: normalizeValue(cardData.setName),
     normalizedNumber: normalizeNumber(cardData.number),
@@ -175,12 +175,15 @@ export function scoreCandidate(matchContext, candidateMatchData) {
   if (externalIdMatch) {
     confidence = 0.97;
     confidenceReason = "exact external_id match";
+  } else if (gameMatch && setIdMatch && numberMatch && exactNameMatch) {
+    confidence = 0.95;
+    confidenceReason = "exact game + name + set_id + number match";
+  } else if (gameMatch && numberMatch && exactNameMatch) {
+    confidence = 0.90;
+    confidenceReason = "exact game + number + name match";
   } else if (gameMatch && setIdMatch && numberMatch) {
     confidence = 0.94;
     confidenceReason = "exact game + set_id + number match";
-  } else if (gameMatch && numberMatch && exactNameMatch) {
-    confidence = 0.88;
-    confidenceReason = "exact game + number + name match";
   } else if (gameMatch && exactNameMatch && (setIdMatch || setNameMatch)) {
     confidence = 0.82;
     confidenceReason = "exact game + name + set match";

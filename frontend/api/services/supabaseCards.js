@@ -233,12 +233,19 @@ function isCollectorNumberOnlyDistractor(candidate) {
   return hasNumber && !hasName && !hasSet && !hasExternalId;
 }
 
+function isLowScoreNameConflict(candidate) {
+  return candidate.matchScore <= 20 && hasReason(candidate, /name conflict/i);
+}
+
 export function pruneWeakDistractors(candidates) {
   const hasStrongIdentityMatch = candidates.some(isStrongIdentityMatch);
 
   if (!hasStrongIdentityMatch) return candidates;
 
-  return candidates.filter((candidate) => !isCollectorNumberOnlyDistractor(candidate));
+  return candidates.filter((candidate) => (
+    !isCollectorNumberOnlyDistractor(candidate) &&
+    !isLowScoreNameConflict(candidate)
+  ));
 }
 
 function formatSupabaseCardMatch(card, cardData, matchContext, lookupStage) {
@@ -285,8 +292,22 @@ function formatSupabaseCardMatch(card, cardData, matchContext, lookupStage) {
   return {
     ...candidate,
     regionalPrices,
-    matchScore: match.score,
+    matchScore: match.finalScore,
     matchReasons: match.reasons,
+    ...(isAnalyzeDebugEnabled()
+      ? {
+          scoreDebug: {
+            name: candidate.name,
+            number: candidate.number,
+            matchScore: match.finalScore,
+            baseScore: match.baseScore,
+            finalScore: match.finalScore,
+            capsApplied: match.capsApplied,
+            conflictingFields: match.conflictingFields,
+            matchReasons: match.reasons,
+          },
+        }
+      : {}),
     lookupStage,
     lookupStages: [lookupStage].filter(Boolean),
     ...(isAnalyzeDebugEnabled()

@@ -211,7 +211,7 @@ test("exact game + set_id + number match scores very high", () => {
     },
   );
 
-  assert.equal(match.confidenceReason, "exact game + set_id + number match");
+  assert.equal(match.confidenceReason, "exact game + name + set_id + number match");
   assert.ok(match.score >= 90);
   assert.ok(match.score <= 98);
   assert.ok(match.matchedFields.includes("set_id"));
@@ -310,7 +310,7 @@ test("missing optional metadata does not crush a strong match", () => {
     },
   );
 
-  assert.equal(match.confidenceReason, "exact game + set_id + number match");
+  assert.equal(match.confidenceReason, "exact game + name + set_id + number match");
   assert.ok(match.score >= 90);
   assert.deepEqual(match.conflictingFields, []);
 });
@@ -410,6 +410,49 @@ test("exact name and collector number beats collector-number-only candidates", (
   assert.ok(exactMatch.score > numberOnlyMatch.score);
 });
 
+test("setCode mismatch does not cap exact name and collector number match", () => {
+  const match = scoreCardMatch(
+    {
+      game: "Pokemon",
+      card: "Umbreon ex",
+      setCode: "MEG",
+      number: "161",
+    },
+    {
+      game: "pokemon",
+      name: "Umbreon ex",
+      setId: "sv8",
+      number: "161",
+    },
+  );
+
+  assert.equal(match.confidenceReason, "exact game + number + name match");
+  assert.ok(!match.conflictingFields.includes("set"));
+  assert.ok(match.score >= 85);
+});
+
+test("wrong name with same set and collector number is capped and pruned", () => {
+  const match = scoreCardMatch(
+    {
+      game: "Pokemon",
+      card: "Umbreon ex",
+      setId: "sv8",
+      number: "161",
+    },
+    {
+      game: "pokemon",
+      name: "Lickitung",
+      setId: "sv8",
+      number: "161",
+    },
+  );
+
+  assert.equal(match.confidenceReason, "exact game + set_id + number match");
+  assert.ok(match.conflictingFields.includes("name"));
+  assert.ok(match.capsApplied.some((cap) => cap.reason === "name conflict cap"));
+  assert.ok(match.score <= 20);
+});
+
 test("number-only distractors are pruned when a strong identity match exists", () => {
   const candidates = [
     {
@@ -423,6 +466,28 @@ test("number-only distractors are pruned when a strong identity match exists", (
       name: "Lickitung",
       matchScore: 8,
       matchReasons: ["game match", "collector number match", "name conflict"],
+    },
+  ];
+
+  const pruned = pruneWeakDistractors(candidates);
+
+  assert.equal(pruned.length, 1);
+  assert.equal(pruned[0].id, "umbreon-161");
+});
+
+test("low-score name conflicts are pruned when a strong identity match exists", () => {
+  const candidates = [
+    {
+      id: "umbreon-161",
+      name: "Umbreon ex",
+      matchScore: 88,
+      matchReasons: ["game match", "exact name", "collector number match"],
+    },
+    {
+      id: "lickitung-161",
+      name: "Lickitung",
+      matchScore: 20,
+      matchReasons: ["game match", "set id match", "collector number match", "name conflict"],
     },
   ];
 
