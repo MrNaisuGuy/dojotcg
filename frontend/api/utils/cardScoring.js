@@ -80,6 +80,7 @@ export function scoreCandidate(matchContext, candidateMatchData) {
   const matchedFields = [];
   const conflictingFields = [];
   const scoreBreakdown = [];
+  const pokemonDebugReasons = [];
 
   const gameMatch = Boolean(
     (matchContext.gameKey &&
@@ -159,12 +160,25 @@ export function scoreCandidate(matchContext, candidateMatchData) {
   if (rarityMatch) matchedFields.push("rarity");
   if (cardTypeMatch) matchedFields.push("card_type");
 
+  if (matchContext.gameKey === "pokemon") {
+    if (exactNameMatch) pokemonDebugReasons.push("pokemon name match");
+    if (nameConflict) pokemonDebugReasons.push("pokemon name conflict");
+    if (numberMatch) pokemonDebugReasons.push("pokemon collector number match");
+    if (printedTotalMatch) pokemonDebugReasons.push("pokemon printed total match");
+    if (valuesConflict(matchContext.printedTotal, candidateMatchData.printedTotal)) {
+      pokemonDebugReasons.push("pokemon printed total conflict");
+    }
+    if (setNameMatch) pokemonDebugReasons.push("pokemon set name match");
+    if (setConflict) pokemonDebugReasons.push("pokemon set name conflict");
+    if (setIdMatch) pokemonDebugReasons.push("pokemon trusted set id match");
+  }
+
   if (!gameMatch && valuesConflict(matchContext.normalizedGame, candidateMatchData.normalizedGame)) conflictingFields.push("game");
   if (valuesConflict(matchContext.externalId, candidateMatchData.externalId)) conflictingFields.push("external_id");
   if (valuesConflict(matchContext.onePieceCardId, candidateMatchData.onePieceCardId)) conflictingFields.push("one_piece_card_id");
   if (setConflict) conflictingFields.push("set");
   if (nameConflict) conflictingFields.push("name");
-  if (valuesConflict(matchContext.normalizedNumber, candidateMatchData.normalizedNumber)) conflictingFields.push("number");
+  if (!numberMatch && valuesConflict(matchContext.normalizedNumber, candidateMatchData.normalizedNumber)) conflictingFields.push("number");
   if (valuesConflict(matchContext.printedTotal, candidateMatchData.printedTotal)) conflictingFields.push("printed_total");
   if (valuesConflict(matchContext.language, candidateMatchData.language)) conflictingFields.push("language");
   if (valuesConflict(matchContext.rarity, candidateMatchData.rarity)) conflictingFields.push("rarity");
@@ -172,7 +186,22 @@ export function scoreCandidate(matchContext, candidateMatchData) {
   let confidence = 0.2;
   let confidenceReason = "weak text match";
 
-  if (externalIdMatch) {
+  if (matchContext.gameKey === "pokemon" && gameMatch && exactNameMatch && numberMatch) {
+    confidence = 0.92;
+    confidenceReason = "pokemon exact name + collector number match";
+  } else if (matchContext.gameKey === "pokemon" && gameMatch && exactNameMatch && printedTotalMatch) {
+    confidence = 0.88;
+    confidenceReason = "pokemon exact name + printed total match";
+  } else if (matchContext.gameKey === "pokemon" && gameMatch && exactNameMatch && setNameMatch) {
+    confidence = 0.84;
+    confidenceReason = "pokemon exact name + set name match";
+  } else if (matchContext.gameKey === "pokemon" && gameMatch && numberMatch && printedTotalMatch) {
+    confidence = 0.55;
+    confidenceReason = "pokemon collector number + printed total match";
+  } else if (matchContext.gameKey === "pokemon" && gameMatch && exactNameMatch) {
+    confidence = 0.76;
+    confidenceReason = "pokemon exact name match";
+  } else if (externalIdMatch) {
     confidence = 0.97;
     confidenceReason = "exact external_id match";
   } else if (gameMatch && setIdMatch && numberMatch && exactNameMatch) {
@@ -232,6 +261,12 @@ export function scoreCandidate(matchContext, candidateMatchData) {
   };
 
   for (const field of conflictingFields) {
+    if (matchContext.gameKey === "pokemon" && field === "printed_total" && exactNameMatch && numberMatch) {
+      reasons.push("printed total conflict");
+      scoreBreakdown.push({ reason: "printed_total conflict ignored for pokemon name + number match", delta: 0 });
+      continue;
+    }
+
     const delta = conflictPenalties[field] ?? -0.1;
     confidence += delta;
     reasons.push(`${field.replaceAll("_", " ")} conflict`);
@@ -253,7 +288,9 @@ export function scoreCandidate(matchContext, candidateMatchData) {
   if (nameConflict) applyCap("name conflict cap", 0.2);
   if (setConflict) applyCap("set conflict cap", 0.25);
   if (conflictingFields.includes("number")) applyCap("number conflict cap", 0.25);
-  if (conflictingFields.includes("printed_total")) applyCap("printed total conflict cap", 0.5);
+  if (conflictingFields.includes("printed_total") && !(matchContext.gameKey === "pokemon" && exactNameMatch && numberMatch)) {
+    applyCap("printed total conflict cap", 0.5);
+  }
 
   if (gameMatch) reasons.push("game match");
   if (externalIdMatch) reasons.push("external_id match");
@@ -280,6 +317,7 @@ export function scoreCandidate(matchContext, candidateMatchData) {
     baseScore: Math.round(baseScore * 1000) / 1000,
     capsApplied,
     finalScore: Math.round(clampedConfidence * 1000) / 10,
+    pokemonDebugReasons,
     scoreBreakdown,
   };
 }

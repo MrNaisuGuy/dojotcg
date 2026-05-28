@@ -1,0 +1,151 @@
+game,name,set_id,number,image_url
+pokemon,Golisopod,sm11,51,https://images.pokemontcg.io/sm11/51_hires.png
+pokemon,Terrakion-EX,bw6,121,https://images.pokemontcg.io/bw6/121_hires.png
+pokemon,Registeel-EX,bw6,122,https://images.pokemontcg.io/bw6/122_hires.png
+pokemon,Rayquaza-EX,bw6,123,https://images.pokemontcg.io/bw6/123_hires.png
+pokemon,Staryu,mcd15,4,https://images.pokemontcg.io/mcd15/4_hires.png
+pokemon,Pyukumuku,sm11,52,https://images.pokemontcg.io/sm11/52_hires.png
+pokemon,Giratina-EX,bw6,124,https://images.pokemontcg.io/bw6/124_hires.png
+pokemon,Tapu Fini,sm11,53,https://images.pokemontcg.io/sm11/53_hires.png
+pokemon,Reuniclus,bw6,126,https://images.pokemontcg.io/bw6/126_hires.png
+pokemon,Mudkip,mcd15,5,https://images.pokemontcg.io/mcd15/5_hires.png
+pokemon,Raichu & Alolan Raichu-GX,sm11,54,https://images.pokemontcg.io/sm11/54_hires.png
+pokemon,Krookodile,bw6,127,https://images.pokemontcg.io/bw6/127_hires.png
+pokemon,Pikachu,sm11,55,https://images.pokemontcg.io/sm11/55_hires.png
+pokemon,Rayquaza,bw6,128,https://images.pokemontcg.io/bw6/128_hires.png
+pokemon,Pikachu,mcd15,6,https://images.pokemontcg.io/mcd15/6_hires.png
+pokemon,Pikachu,sm11,56,https://images.pokemontcg.io/sm11/56_hires.png
+pokemon,Dratini,dv1,1,https://images.pokemontcg.io/dv1/1_hires.png
+pokemon,Dratini,dv1,2,https://images.pokemontcg.io/dv1/2_hires.png
+pokemon,Dragonair,dv1,3,https://images.pokemontcg.io/dv1/3_hires.png
+pokemon,Electrike,mcd15,7,https://images.pokemontcg.io/mcd15/7_hires.png
+pokemon,Alolan Raichu,sm11,57,https://images.pokemontcg.io/sm11/57_hires.png
+pokemon,Dragonair,dv1,4,https://images.pokemontcg.io/dv1/4_hires.png
+pokemon,Dragonite,dv1,5,https://images.pokemontcg.io/dv1/5_hires.png
+pokemon,Bagon,dv1,6,https://images.pokemontcg.io/dv1/6_hires.png
+pokemon,Rhyhorn,mcd15,8,https://images.pokemontcg.io/mcd15/8_hires.png
+pokemon,Magnemite,sm11,58,https://images.pokemontcg.io/sm11/58_hires.png
+pokemon,Shelgon,dv1,7,https://images.pokemontcg.io/dv1/7_hires.png
+pokemon,Salamence,dv1,8,https://images.pokemontcg.io/dv1/8_hires.png
+pokemon,Latios,dv1,10,https://images.pokemontcg.io/dv1/10_hires.png
+pokemon,Meditite,mcd15,9,https://images.pokemontcg.io/mcd15/9_hires.png
+pokemon,Magneton,sm11,59,https://images.pokemontcg.io/sm11/59_hires.png
+pokemon,Rayquaza,dv1,11,https://images.pokemontcg.io/dv1/11_hires.png
+pokemon,Axew,dv1,12,https://images.pokemontcg.io/dv1/12_hires.png
+pokemon,Axew,dv1,13,https://images.pokemontcg.io/dv1/13_hires.png
+pokemon,Marill,mcd15,10,https://images.pokemontcg.io/mcd15/10_hires.png
+pokemon,Magnezone,sm11,60,https://images.pokemontcg.io/sm11/60_hires.png
+pokemon,Fraxure,dv1,14,https://images.pokemontcg.io/dv1/14_hires.png
+pokemon,Fraxure,dv1,15,https://images.pokemontcg.io/dv1/15_hires.png
+pokemon,Haxorus,dv1,16,https://images.pokemontcg.io/dv1/16_hires.png
+pokemon,Zigzagoon,mcd15,11,https://images.pokemontcg.io/mcd15/11_hires.png
+pokemon,Joltik,sm11,61,https://images.pokemontcg.io/sm11/61_hires.png
+pokemon,Druddigon,dv1,17,https://images.pokemontcg.io/dv1/17_hires.png
+pokemon,Exp. Share,dv1,18,https://images.pokemontcg.io/dv1/18_hires.png
+pokemon,First Ticket,dv1,19,https://images.pokemontcg.io/dv1/19_hires.png
+pokemon,Skitty,mcd15,12,https://images.pokemontcg.io/mcd15/12_hires.png
+pokemon,Galvantula,sm11,62,https://images.pokemontcg.io/sm11/62_hires.png
+pokemon,Super Rod,dv1,20,https://images.pokemontcg.io/dv1/20_hires.png
+pokemon,Tynamo,sm11,63,https://images.pokemontcg.io/sm11/63_hires.png
+pokemon,Kyurem,dv1,21,https://images.pokemontcg.io/dv1/21_hires.png
+pokemon,Tynamo,sm11,64,https://images.pokemontcg.io/sm11/64_hires.png
+mtg,Pearled Unicorn,cei,31,https://cards.scryfall.io/normal/front/2/5/2543f1e5-e91a-4967-b623-9b5b23c3e37a.jpg?1559591660
+mtg,Witherbloom Charm,sos,244,https://cards.scryfall.io/normal/front/2/5/254437f7-7a8a-4b11-9cea-e8e7ea23c59e.jpg?1775938703
+mtg,Mox Ruby,30a,558,https://cards.scryfall.io/normal/front/2/5/25447654-a6e1-4724-bf33-62eacd35e69e.jpg?1664929387
+mtg,Radiant Flames,pbfz,151,https://cards.scryfall.io/normal/front/2/5/2548487e-a355-4a05-acbc-3031d98f4289.jpg?1562132516
+mtg,Assault on Osgiliath,ltr,285,https://cards.scryfall.io/normal/front/2/5/2549b70a-6bd0-4c9b-96b7-4ab775a30cd3.jpg?1719684269
+mtg,Swamp,s99,164,https://cards.scryfall.io/normal/front/2/5/254a47bd-a13d-4d14-969c-d367cb41bcf8.jpg?1562873594
+mtg,Creeping Tar Pit,who,267,https://cards.scryfall.io/normal/front/2/5/254a6531-7cf7-4c74-9050-65fe4b273744.jpg?1696637025
+mtg,Talisman of Progress,who,844,https://cards.scryfall.io/normal/front/2/5/254a7fd9-0c09-4d61-8440-b9a82b71930a.jpg?1696638332
+mtg,River Boa,wc99,ml249,https://cards.scryfall.io/normal/front/2/5/254aa576-c0df-4bae-84e5-d7d7f7b5d913.jpg?1562902509
+mtg,Enchantment Alteration,usg,72,https://cards.scryfall.io/normal/front/2/5/254aa8d0-f0f5-4fb2-a6ba-07453d71e229.jpg?1562902814
+mtg,"Kastral, the Windcrested",pblb,221s,https://cards.scryfall.io/normal/front/2/5/254b10a1-6f3f-4b81-b788-5b7f1408ff14.jpg?1723082165
+mtg,Mortuary Mire,c19,260,https://cards.scryfall.io/normal/front/2/5/254bb847-4032-425f-bdea-a8b1ddbd65cd.jpg?1568005255
+mtg,Pox,mb2,185,https://cards.scryfall.io/normal/front/2/5/254bc167-ae0d-4ab5-b139-e70d7c19b826.jpg?1723222132
+mtg,Sledge-Class Seedship,peoe,208s,https://cards.scryfall.io/normal/front/2/5/254c4f04-bfc8-4e1d-a1fd-a2c7e559d17a.jpg?1754671300
+mtg,Sculpting Steel,klr,302,https://cards.scryfall.io/normal/front/3/4/3448561f-cfbb-4134-a1a8-d8ebd32e2a89.jpg?1734543327
+mtg,Bite of the Black Rose,cns,26,https://cards.scryfall.io/normal/front/2/5/254d1363-1204-41d2-9799-34484a3eb211.jpg?1562864493
+mtg,Hallowed Healer,ody,25,https://cards.scryfall.io/normal/front/2/5/254d5bf0-f985-4919-a142-d4578ae9a38e.jpg?1562901960
+mtg,Squirrel Nest,cns,180,https://cards.scryfall.io/normal/front/2/5/254da3ab-d845-4317-86dd-d98a2a5355a8.jpg?1562864495
+mtg,Typhoon,leg,209,https://cards.scryfall.io/normal/front/2/5/254e0403-67d8-4e73-8d89-c901ebeba49f.jpg?1562858218
+mtg,Ebon Drake,5dn,48,https://cards.scryfall.io/normal/front/2/5/254ea05c-c349-4a95-8751-779b044603bb.jpg?1562875902
+mtg,Golgari Signet,cm2,192,https://cards.scryfall.io/normal/front/2/5/254f4460-beb9-43ce-a176-d040f7dd7e9e.jpg?1562272914
+mtg,Reality Shaping,opc2,6,https://cards.scryfall.io/normal/front/2/5/254f484d-a652-4747-9b78-6bf083a8f656.jpg?1547434236
+mtg,Gnawing Crescendo,woe,131,https://cards.scryfall.io/normal/front/2/5/254fc64a-9734-44a6-8869-ab03512f1a99.jpg?1692938235
+mtg,Monsoon,ice,298,https://cards.scryfall.io/normal/front/2/5/254fcc50-79a5-40cd-b028-e78dde3f8480.jpg?1587912111
+mtg,Yavimaya Elder,m3c,254,https://cards.scryfall.io/normal/front/2/5/254ff45b-ca3e-42e5-829b-cbb2c7a69a5e.jpg?1717190616
+mtg,Swords to Plowshares,leb,41,https://cards.scryfall.io/normal/front/2/5/255099be-c64e-4f6a-8463-4fc058d6908d.jpg?1559591712
+mtg,Depressurize,eoe,95,https://cards.scryfall.io/normal/front/2/5/25520d5a-1a83-42cc-8ace-8b1156019d64.jpg?1752946939
+mtg,Arcane Denial,cmr,630,https://cards.scryfall.io/normal/front/2/5/25532c00-d4c0-4f49-b306-6991e49d3c4c.jpg?1608918421
+mtg,Evolving Wilds,m15,243,https://cards.scryfall.io/normal/front/2/5/2553b8ae-e5af-40ba-8b3b-d5652919c9bb.jpg?1562784028
+mtg,"A-Mishra, Excavation Prodigy",bro,A-140,https://cards.scryfall.io/normal/front/2/5/2553c1f3-0382-4be3-8f8c-c99251ad814e.jpg?1705118144
+mtg,"Azlask, the Swelling Scourge",m3c,17,https://cards.scryfall.io/normal/front/2/5/25542498-0459-4579-be7c-6f9e531377e7.jpg?1721158644
+mtg,Drag the Canal,pmkm,199p,https://cards.scryfall.io/normal/front/2/5/25545d18-3568-488e-bcab-188447654611.jpg?1707510057
+mtg,Arasta of the Endless Web,mar,32,https://cards.scryfall.io/normal/front/2/5/255544be-db0f-4dcc-8787-f05652cd2684.jpg?1775115436
+mtg,Inspiring Call,tle,168,https://cards.scryfall.io/normal/front/2/5/2555ec7b-5cc2-4ffd-9344-6368019feff9.jpg?1764118848
+mtg,Archmage's Newt,otj,316,https://cards.scryfall.io/normal/front/2/5/25563be1-71f1-4f70-8527-02c5855a0b9d.jpg?1712356590
+mtg,Faceless One,clb,1,https://cards.scryfall.io/normal/front/2/5/25564fba-5765-457b-8dd3-f26b877221b8.jpg?1778821680
+mtg,Barrensteppe Siege,tdm,171,https://cards.scryfall.io/normal/front/2/5/2556a35b-2229-42c7-8cb3-c8c668403dd2.jpg?1743204657
+mtg,Reef Worm,mh3,271,https://cards.scryfall.io/normal/front/2/5/25576181-a5a4-4baf-a2b4-fbfe13fb9df6.jpg?1717013599
+mtg,Screaming Swarm,dbl,342,https://cards.scryfall.io/normal/front/2/5/25583bb7-9071-40ff-b4b3-d9587ccf91df.jpg?1673162055
+mtg,Crystalline Armor,tle,137,https://cards.scryfall.io/normal/front/2/5/2558ce86-ee30-4075-b991-bfb5f7513a5e.jpg?1764118645
+mtg,Rakdos Charm,pa1,7,https://cards.scryfall.io/normal/front/2/5/255942f6-e57f-40e2-89bf-04f07212cdec.jpg?1750836641
+mtg,House Cartographer // House Cartographer,adsk,15,https://cards.scryfall.io/normal/front/2/5/25594ff8-cf60-4438-b269-b3fc56af5c7d.jpg?1729046938
+mtg,Grafted Identity,mid,57,https://cards.scryfall.io/normal/front/2/5/2559846b-03d6-4a2c-97e1-c71f107e9f24.jpg?1634348937
+mtg,Psionic Sliver,tsp,72,https://cards.scryfall.io/normal/front/2/5/2559ca03-4442-47c5-bd6e-84e71cfa6ca5.jpg?1562902815
+mtg,Johan,bchr,77,https://cards.scryfall.io/normal/front/2/5/255af372-436e-4654-a2a4-2dd1a397db05.jpg?1681080811
+mtg,Black Vise,ced,234,https://cards.scryfall.io/normal/front/2/5/255c93fb-59b3-474f-93c3-bf543b570732.jpg?1559591572
+mtg,Master Symmetrist,stx,138,https://cards.scryfall.io/normal/front/2/5/255cdc39-6ad8-4831-9718-6712cb17654c.jpg?1666629845
+mtg,Cat,sld,27,https://cards.scryfall.io/normal/front/2/5/255dcc91-7b3d-4b58-85f3-b21be805966e.jpg?1575842279
+mtg,Sword of Once and Future,mom,375,https://cards.scryfall.io/normal/front/2/5/255e402f-5083-4ce4-a807-ba17b949e384.jpg?1779251166
+mtg,Hit the Mother Lode,plci,153s,https://cards.scryfall.io/normal/front/2/5/255ebdd8-2bbe-4a0f-8aaf-c0aa815db0c7.jpg?1701304102
+onepiece,Rebecca,PRB-02,OP05-091,https://en.onepiece-cardgame.com/images/cardlist/card/OP05-091_r1.png?260518
+onepiece,Mary Geoise,PRB-02,OP05-097,https://en.onepiece-cardgame.com/images/cardlist/card/OP05-097_r1.png?260518
+onepiece,Gion,PRB-02,OP06-044,https://en.onepiece-cardgame.com/images/cardlist/card/OP06-044_r1.png?260518
+onepiece,Charlotte Pudding,PRB-02,OP06-047,https://en.onepiece-cardgame.com/images/cardlist/card/OP06-047_r1.png?260518
+onepiece,Ama no Murakumo Sword,PRB-02,OP06-056,https://en.onepiece-cardgame.com/images/cardlist/card/OP06-056_r2.png?260518
+onepiece,Gravity Blade Raging Tiger,PRB-02,OP06-058,https://en.onepiece-cardgame.com/images/cardlist/card/OP06-058_p1.png?260518
+onepiece,GERMA 66,PRB-02,OP06-078,https://en.onepiece-cardgame.com/images/cardlist/card/OP06-078_r1.png?260518
+onepiece,You're the One Who Should Disappear.,PRB-02,OP06-115,https://en.onepiece-cardgame.com/images/cardlist/card/OP06-115_r1.png?260518
+onepiece,Crocodile,PRB-02,OP07-040,https://en.onepiece-cardgame.com/images/cardlist/card/OP07-040_p2.png?260518
+onepiece,Crocodile,PRB-02,OP07-040,https://en.onepiece-cardgame.com/images/cardlist/card/OP07-040_r1.png?260518
+onepiece,Sanji,PRB-02,OP07-064,https://en.onepiece-cardgame.com/images/cardlist/card/OP07-064_r1.png?260518
+onepiece,Slow-Slow Beam Sword,PRB-02,OP07-076,https://en.onepiece-cardgame.com/images/cardlist/card/OP07-076_p1.png?260518
+onepiece,Franky,PRB-02,OP07-107,https://en.onepiece-cardgame.com/images/cardlist/card/OP07-107_r1.png?260518
+onepiece,He Possesses the World's Most Brilliant Mind,PRB-02,OP07-114,https://en.onepiece-cardgame.com/images/cardlist/card/OP07-114_p1.png?260518
+onepiece,Portgas.D.Ace,PRB-02,OP07-119,https://en.onepiece-cardgame.com/images/cardlist/card/OP07-119_r1.png?260518
+onepiece,Scratchmen Apoo,PRB-02,OP08-087,https://en.onepiece-cardgame.com/images/cardlist/card/OP08-087_r1.png?260518
+onepiece,Uta,PRB-02,OP09-002,https://en.onepiece-cardgame.com/images/cardlist/card/OP09-002_r1.png?260518
+onepiece,Limejuice,PRB-02,OP09-014,https://en.onepiece-cardgame.com/images/cardlist/card/OP09-014_r2.png?260518
+onepiece,Sabo,PRB-02,OP09-027,https://en.onepiece-cardgame.com/images/cardlist/card/OP09-027_p1.png?260518
+onepiece,Sabo,PRB-02,OP09-027,https://en.onepiece-cardgame.com/images/cardlist/card/OP09-027_r1.png?260518
+onepiece,Franky,PRB-02,OP09-072,https://en.onepiece-cardgame.com/images/cardlist/card/OP09-072_r1.png?260518
+onepiece,Gum-Gum Giant,PRB-02,OP09-078,https://en.onepiece-cardgame.com/images/cardlist/card/OP09-078_r1.png?260518
+onepiece,Catarina Devon,PRB-02,OP09-084,https://en.onepiece-cardgame.com/images/cardlist/card/OP09-084_p1.png?260518
+onepiece,Catarina Devon,PRB-02,OP09-084,https://en.onepiece-cardgame.com/images/cardlist/card/OP09-084_r1.png?260518
+onepiece,Jesus Burgess,PRB-02,OP09-086,https://en.onepiece-cardgame.com/images/cardlist/card/OP09-086_p1.png?260518
+onepiece,Jesus Burgess,PRB-02,OP09-086,https://en.onepiece-cardgame.com/images/cardlist/card/OP09-086_r2.png?260518
+onepiece,My Era...Begins!!,PRB-02,OP09-096,https://en.onepiece-cardgame.com/images/cardlist/card/OP09-096_r1.png?260518
+onepiece,Black Hole,PRB-02,OP09-098,https://en.onepiece-cardgame.com/images/cardlist/card/OP09-098_p1.png?260518
+onepiece,Tony Tony.Chopper,PRB-02,OP10-011,https://en.onepiece-cardgame.com/images/cardlist/card/OP10-011_r1.png?260518
+onepiece,God Thread,PRB-02,OP10-079,https://en.onepiece-cardgame.com/images/cardlist/card/OP10-079_r1.png?260518
+onepiece,Roronoa Zoro,PRB-02,OP10-095,https://en.onepiece-cardgame.com/images/cardlist/card/OP10-095_r1.png?260518
+onepiece,Basil Hawkins,PRB-02,OP10-109,https://en.onepiece-cardgame.com/images/cardlist/card/OP10-109_r1.png?260518
+onepiece,X.Drake,PRB-02,OP10-114,https://en.onepiece-cardgame.com/images/cardlist/card/OP10-114_r1.png?260518
+onepiece,Sanji,PRB-02,P-068,https://en.onepiece-cardgame.com/images/cardlist/card/P-068_r1.png?260518
+onepiece,Koala,PRB-02,P-069,https://en.onepiece-cardgame.com/images/cardlist/card/P-069_r1.png?260518
+onepiece,Portgas.D.Ace,PRB-02,P-074,https://en.onepiece-cardgame.com/images/cardlist/card/P-074_r1.png?260518
+onepiece,Lim,PRB-02,P-079,https://en.onepiece-cardgame.com/images/cardlist/card/P-079_r1.png?260518
+onepiece,Dracule Mihawk,PRB-02,P-081,https://en.onepiece-cardgame.com/images/cardlist/card/P-081_r1.png?260518
+onepiece,Crocodile,PRB-02,P-082,https://en.onepiece-cardgame.com/images/cardlist/card/P-082_p2.png?260518
+onepiece,Trafalgar Law,PRB-02,P-088,https://en.onepiece-cardgame.com/images/cardlist/card/P-088_p3.png?260518
+onepiece,Trafalgar Law,PRB-02,PRB02-002,https://en.onepiece-cardgame.com/images/cardlist/card/PRB02-002.png?260518
+onepiece,Sabo,PRB-02,PRB02-014,https://en.onepiece-cardgame.com/images/cardlist/card/PRB02-014.png?260518
+onepiece,Shiryu,PRB-02,PRB02-015,https://en.onepiece-cardgame.com/images/cardlist/card/PRB02-015.png?260518
+onepiece,Perona,PRB-02,ST12-005,https://en.onepiece-cardgame.com/images/cardlist/card/ST12-005_r1.png?260518
+onepiece,Plastic Surgery Shot,PRB-02,ST12-017,https://en.onepiece-cardgame.com/images/cardlist/card/ST12-017_r1.png?260518
+onepiece,Sabo,PRB-02,ST13-007,https://en.onepiece-cardgame.com/images/cardlist/card/ST13-007_p2.png?260518
+onepiece,Sabo,PRB-02,ST13-007,https://en.onepiece-cardgame.com/images/cardlist/card/ST13-007_r1.png?260518
+onepiece,Portgas.D.Ace,PRB-02,ST13-010,https://en.onepiece-cardgame.com/images/cardlist/card/ST13-010_p2.png?260518
+onepiece,Monkey.D.Luffy,PRB-02,ST13-014,https://en.onepiece-cardgame.com/images/cardlist/card/ST13-014_r1.png?260518
+onepiece,Roronoa Zoro,PRB-02,ST14-013,https://en.onepiece-cardgame.com/images/cardlist/card/ST14-013_r1.png?260518

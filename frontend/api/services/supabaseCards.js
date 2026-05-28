@@ -286,7 +286,9 @@ function formatSupabaseCardMatch(card, cardData, matchContext, lookupStage) {
   const regionalPrices = estimateRegionalPrices(candidate);
   endTimer("analyze:pricing");
 
+  startTimer("analyze:candidate_scoring");
   const match = scoreCandidate(matchContext, candidateMatchData);
+  endTimer("analyze:candidate_scoring");
   const dedupeKeys = getCandidateDedupeKeys(candidate);
 
   return {
@@ -320,6 +322,7 @@ function formatSupabaseCardMatch(card, cardData, matchContext, lookupStage) {
             finalScore: match.finalScore,
             matchedFields: match.matchedFields,
             conflictingFields: match.conflictingFields,
+            pokemonDebugReasons: match.pokemonDebugReasons,
             scoreBreakdown: match.scoreBreakdown,
             dedupeKeys,
             lookupStages: [lookupStage].filter(Boolean),
@@ -329,13 +332,13 @@ function formatSupabaseCardMatch(card, cardData, matchContext, lookupStage) {
   };
 }
 
-function getSetIdLookupValues(cardData, onePieceCardId) {
+function getSetIdLookupValues(cardData, onePieceCardId, gameKey) {
   const onePieceSetId = onePieceCardId?.match(/^([A-Z]+[0-9]{2})-/)?.[1];
   const values = [
     cardData.setId,
     cardData.set_id,
-    cardData.setCode,
-    onePieceSetId,
+    gameKey === "pokemon" ? null : cardData.setCode,
+    gameKey === "onepiece" ? onePieceSetId : null,
   ]
     .map((value) => String(value || "").trim())
     .filter(Boolean)
@@ -489,7 +492,7 @@ export async function findLocalCandidates(cardData, supabase) {
     : null;
   const numberLookupValues = getNumberLookupValues(cardData, onePieceCardId);
   const externalIdLookupValues = getExternalIdLookupValues(cardData, onePieceCardId);
-  const setIdLookupValues = getSetIdLookupValues(cardData, onePieceCardId);
+  const setIdLookupValues = getSetIdLookupValues(cardData, onePieceCardId, gameKey);
   const targetPrintedTotal = normalizePrintedTotal(cardData.printedTotal) || printedTotal;
   const names = getNameLookupValues(cardData);
 
@@ -534,6 +537,7 @@ export async function findLocalCandidates(cardData, supabase) {
     });
   }
 
+  startTimer("analyze:supabase_exact_lookup");
   for (const stagedQuery of stagedQueries) {
     const { data, describe } = await runCandidateQuery({
       supabase,
@@ -545,6 +549,7 @@ export async function findLocalCandidates(cardData, supabase) {
     const formatted = formatMatches(data, cardData, matchContext, 5, stagedQuery.stage);
 
     if (formatted.candidates.length > 0) {
+      endTimer("analyze:supabase_exact_lookup");
       endTimer("analyze:supabase_lookup");
       return {
         candidates: formatted.candidates,
@@ -554,6 +559,7 @@ export async function findLocalCandidates(cardData, supabase) {
       };
     }
   }
+  endTimer("analyze:supabase_exact_lookup");
 
   if (names.length === 0 || gameKey === "unknown") {
     endTimer("analyze:supabase_lookup");

@@ -211,7 +211,7 @@ test("exact game + set_id + number match scores very high", () => {
     },
   );
 
-  assert.equal(match.confidenceReason, "exact game + name + set_id + number match");
+  assert.equal(match.confidenceReason, "pokemon exact name + collector number match");
   assert.ok(match.score >= 90);
   assert.ok(match.score <= 98);
   assert.ok(match.matchedFields.includes("set_id"));
@@ -310,7 +310,7 @@ test("missing optional metadata does not crush a strong match", () => {
     },
   );
 
-  assert.equal(match.confidenceReason, "exact game + name + set_id + number match");
+  assert.equal(match.confidenceReason, "pokemon exact name + collector number match");
   assert.ok(match.score >= 90);
   assert.deepEqual(match.conflictingFields, []);
 });
@@ -331,7 +331,7 @@ test("conflicting set_id penalizes but does not collapse a number and name match
     },
   );
 
-  assert.equal(match.confidenceReason, "exact game + number + name match");
+  assert.equal(match.confidenceReason, "pokemon exact name + collector number match");
   assert.ok(match.conflictingFields.includes("set"));
   assert.ok(match.capsApplied.some((cap) => cap.reason === "set conflict cap"));
   assert.ok(match.score <= 25);
@@ -426,9 +426,55 @@ test("setCode mismatch does not cap exact name and collector number match", () =
     },
   );
 
-  assert.equal(match.confidenceReason, "exact game + number + name match");
+  assert.equal(match.confidenceReason, "pokemon exact name + collector number match");
   assert.ok(!match.conflictingFields.includes("set"));
   assert.ok(match.score >= 85);
+});
+
+test("Pokemon printed total conflict does not crush exact name and collector number", () => {
+  const match = scoreCardMatch(
+    {
+      game: "Pokemon",
+      card: "Umbreon ex",
+      number: "161/182",
+      printedTotal: 182,
+    },
+    {
+      game: "pokemon",
+      name: "Umbreon ex",
+      number: "161/191",
+      printedTotal: 191,
+    },
+  );
+
+  assert.equal(match.confidenceReason, "pokemon exact name + collector number match");
+  assert.ok(match.conflictingFields.includes("printed_total"));
+  assert.ok(!match.capsApplied.some((cap) => cap.reason === "printed total conflict cap"));
+  assert.ok(match.score >= 85);
+});
+
+test("Pokemon debug reasons include visible-field match details", () => {
+  const match = scoreCardMatch(
+    {
+      game: "Pokemon",
+      card: "Umbreon ex",
+      number: "161/182",
+      printedTotal: 182,
+      setName: "Mega Evolution",
+    },
+    {
+      game: "pokemon",
+      name: "Umbreon ex",
+      number: "161/182",
+      printedTotal: 182,
+      set: "Mega Evolution",
+    },
+  );
+
+  assert.ok(match.pokemonDebugReasons.includes("pokemon name match"));
+  assert.ok(match.pokemonDebugReasons.includes("pokemon collector number match"));
+  assert.ok(match.pokemonDebugReasons.includes("pokemon printed total match"));
+  assert.ok(match.pokemonDebugReasons.includes("pokemon set name match"));
 });
 
 test("wrong name with same set and collector number is capped and pruned", () => {

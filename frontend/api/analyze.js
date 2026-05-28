@@ -179,6 +179,7 @@ export default async function handler(req, res) {
       candidateError = error.message;
     }
 
+    startTimer("analyze:response_formatting");
     const visionGuess = buildVisionGuess(parsed);
     const responseBody = {
       ...visionGuess,
@@ -194,6 +195,7 @@ export default async function handler(req, res) {
       responseBody.raw = rawText;
       responseBody.candidateDedupeDebug = candidateDedupeDebug;
     }
+    endTimer("analyze:response_formatting");
 
     res.status(200).json(responseBody);
   } catch (error) {
