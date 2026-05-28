@@ -133,6 +133,18 @@ export function scoreCandidate(matchContext, candidateMatchData) {
   const languageMatch = Boolean(matchContext.language && candidateMatchData.language && matchContext.language === candidateMatchData.language);
   const rarityMatch = Boolean(matchContext.rarity && candidateMatchData.rarity && matchContext.rarity === candidateMatchData.rarity);
   const cardTypeMatch = Boolean(matchContext.cardType && candidateMatchData.cardType && matchContext.cardType === candidateMatchData.cardType);
+  const nameConflict = Boolean(
+    matchContext.normalizedName &&
+      candidateMatchData.normalizedName &&
+      !exactNameMatch &&
+      !fuzzyNameMatch
+  );
+  const setConflict = Boolean(
+    (valuesConflict(matchContext.normalizedSetId, candidateMatchData.normalizedSetId) ||
+      (matchContext.normalizedSet && candidateMatchData.normalizedSet && !setNameMatch)) &&
+      !setIdMatch &&
+      !setNameMatch
+  );
 
   if (gameMatch) matchedFields.push("game");
   if (externalIdMatch) matchedFields.push("external_id");
@@ -150,7 +162,8 @@ export function scoreCandidate(matchContext, candidateMatchData) {
   if (!gameMatch && valuesConflict(matchContext.normalizedGame, candidateMatchData.normalizedGame)) conflictingFields.push("game");
   if (valuesConflict(matchContext.externalId, candidateMatchData.externalId)) conflictingFields.push("external_id");
   if (valuesConflict(matchContext.onePieceCardId, candidateMatchData.onePieceCardId)) conflictingFields.push("one_piece_card_id");
-  if (valuesConflict(matchContext.normalizedSetId, candidateMatchData.normalizedSetId)) conflictingFields.push("set_id");
+  if (setConflict) conflictingFields.push("set");
+  if (nameConflict) conflictingFields.push("name");
   if (valuesConflict(matchContext.normalizedNumber, candidateMatchData.normalizedNumber)) conflictingFields.push("number");
   if (valuesConflict(matchContext.printedTotal, candidateMatchData.printedTotal)) conflictingFields.push("printed_total");
   if (valuesConflict(matchContext.language, candidateMatchData.language)) conflictingFields.push("language");
@@ -174,8 +187,11 @@ export function scoreCandidate(matchContext, candidateMatchData) {
   } else if (gameMatch && fuzzyNameMatch) {
     confidence = 0.55;
     confidenceReason = "fuzzy name + game match";
+  } else if (gameMatch && numberMatch) {
+    confidence = 0.08;
+    confidenceReason = "collector number only match";
   } else if (gameMatch) {
-    confidence = 0.12;
+    confidence = 0.05;
     confidenceReason = "game only match";
   }
 
@@ -201,7 +217,8 @@ export function scoreCandidate(matchContext, candidateMatchData) {
     game: -0.25,
     external_id: -0.25,
     one_piece_card_id: -0.25,
-    set_id: -0.14,
+    set: -0.18,
+    name: -0.22,
     number: -0.18,
     printed_total: -0.08,
     language: -0.04,
@@ -215,14 +232,28 @@ export function scoreCandidate(matchContext, candidateMatchData) {
     scoreBreakdown.push({ reason: `${field} conflict`, delta });
   }
 
-  if (gameMatch) reasons.push(`game match (${Math.round(matchContext.gameConfidence * 100)}% confident)`);
+  if (numberMatch && !exactNameMatch && !fuzzyNameMatch && !setIdMatch && !setNameMatch) {
+    const cap = nameConflict || setConflict ? 0.08 : 0.15;
+
+    if (confidence > cap) {
+      scoreBreakdown.push({ reason: "collector number only cap", delta: cap - confidence });
+      confidence = cap;
+    }
+  }
+
+  if ((nameConflict || setConflict || conflictingFields.includes("number") || conflictingFields.includes("printed_total")) && confidence > 0.7) {
+    scoreBreakdown.push({ reason: "identity conflict cap", delta: 0.7 - confidence });
+    confidence = 0.7;
+  }
+
+  if (gameMatch) reasons.push("game match");
   if (externalIdMatch) reasons.push("external_id match");
-  if (setIdMatch) reasons.push(`set id match (${Math.round(matchContext.setConfidence * 100)}% confident)`);
-  if (setNameMatch) reasons.push(`set name match (${Math.round(matchContext.setConfidence * 100)}% confident)`);
-  if (exactNameMatch) reasons.push(`exact name (${Math.round(matchContext.cardConfidence * 100)}% confident)`);
-  if (fuzzyNameMatch) reasons.push(`similar name (${Math.round(matchContext.cardConfidence * 100)}% confident)`);
-  if (exactNumberMatch) reasons.push(`collector number match (${Math.round(matchContext.collectorNumberConfidence * 100)}% confident)`);
-  if (baseNumberMatch) reasons.push(`collector number base match (${Math.round(matchContext.collectorNumberConfidence * 100)}% confident)`);
+  if (setIdMatch) reasons.push("set id match");
+  if (setNameMatch) reasons.push("set name match");
+  if (exactNameMatch) reasons.push("exact name");
+  if (fuzzyNameMatch) reasons.push("similar name");
+  if (exactNumberMatch) reasons.push("collector number match");
+  if (baseNumberMatch) reasons.push("collector number base match");
   if (printedTotalMatch) reasons.push("printed total match");
   if (languageMatch) reasons.push("language match");
   if (rarityMatch) reasons.push("rarity match");

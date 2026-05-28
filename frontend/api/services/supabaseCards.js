@@ -212,6 +212,35 @@ function dedupeRawCards(cards, lookupStage) {
   };
 }
 
+function hasReason(candidate, pattern) {
+  return candidate.matchReasons?.some((reason) => pattern.test(reason));
+}
+
+function isStrongIdentityMatch(candidate) {
+  return candidate.matchScore >= 85 && (
+    hasReason(candidate, /external_id match/i) ||
+    (hasReason(candidate, /exact name/i) && hasReason(candidate, /collector number/i)) ||
+    (hasReason(candidate, /set (?:id |name )?match/i) && hasReason(candidate, /collector number/i))
+  );
+}
+
+function isCollectorNumberOnlyDistractor(candidate) {
+  const hasNumber = hasReason(candidate, /collector number/i);
+  const hasName = hasReason(candidate, /exact name|similar name/i);
+  const hasSet = hasReason(candidate, /set (?:id |name )?match/i);
+  const hasExternalId = hasReason(candidate, /external_id match/i);
+
+  return hasNumber && !hasName && !hasSet && !hasExternalId;
+}
+
+export function pruneWeakDistractors(candidates) {
+  const hasStrongIdentityMatch = candidates.some(isStrongIdentityMatch);
+
+  if (!hasStrongIdentityMatch) return candidates;
+
+  return candidates.filter((candidate) => !isCollectorNumberOnlyDistractor(candidate));
+}
+
 function formatSupabaseCardMatch(card, cardData, matchContext, lookupStage) {
   const parsedPrice = typeof card.price_usd === "string" ? Number(card.price_usd) : card.price_usd;
   const lowestPrice = typeof parsedPrice === "number" && Number.isFinite(parsedPrice) ? parsedPrice : null;
@@ -405,19 +434,22 @@ function formatMatches(data, cardData, matchContext, limit, lookupStage) {
   const matches = rawDedupe.cards
     .map((card) => formatSupabaseCardMatch(card, cardData, matchContext, lookupStage))
     .sort((a, b) => b.matchScore - a.matchScore)
-    .slice(0, limit);
   const deduped = dedupeCandidateMatches(matches);
+  const prunedCandidates = pruneWeakDistractors(deduped.candidates)
+    .sort((a, b) => b.matchScore - a.matchScore)
+    .slice(0, limit);
 
   return {
-    candidates: deduped.candidates,
+    candidates: prunedCandidates,
     dedupeDebug: {
       beforeCount: rawDedupe.debug.beforeCount,
-      afterCount: deduped.debug.afterCount,
+      afterCount: prunedCandidates.length,
       keysUsed: uniqueValues([...rawDedupe.debug.keysUsed, ...deduped.debug.keysUsed]),
       stagesByKey: {
         ...rawDedupe.debug.stagesByKey,
         ...deduped.debug.stagesByKey,
       },
+      prunedCount: deduped.candidates.length - prunedCandidates.length,
     },
   };
 }

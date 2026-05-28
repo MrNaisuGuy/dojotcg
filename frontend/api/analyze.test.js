@@ -6,7 +6,7 @@ import {
   buildMatchContext,
   scoreCandidate,
 } from "./utils/cardScoring.js";
-import { dedupeCandidateMatches } from "./services/supabaseCards.js";
+import { dedupeCandidateMatches, pruneWeakDistractors } from "./services/supabaseCards.js";
 
 function pokemonCandidate(overrides) {
   return {
@@ -332,9 +332,82 @@ test("conflicting set_id penalizes but does not collapse a number and name match
   );
 
   assert.equal(match.confidenceReason, "exact game + number + name match");
-  assert.ok(match.conflictingFields.includes("set_id"));
+  assert.ok(match.conflictingFields.includes("set"));
   assert.ok(match.score >= 60);
   assert.ok(match.score < 88);
+});
+
+test("collector number alone cannot produce high confidence", () => {
+  const match = scoreCardMatch(
+    {
+      game: "Pokemon",
+      card: "Umbreon ex",
+      number: "161",
+    },
+    {
+      game: "pokemon",
+      name: "Lickitung",
+      number: "161",
+    },
+  );
+
+  assert.equal(match.confidenceReason, "collector number only match");
+  assert.ok(match.conflictingFields.includes("name"));
+  assert.ok(match.score < 10);
+  assert.doesNotMatch(match.reasons?.join(" ") || "", /100% confident/);
+});
+
+test("exact name and collector number beats collector-number-only candidates", () => {
+  const exactMatch = scoreCardMatch(
+    {
+      game: "Pokemon",
+      card: "Umbreon ex",
+      number: "161",
+    },
+    {
+      game: "pokemon",
+      name: "Umbreon ex",
+      number: "161",
+    },
+  );
+  const numberOnlyMatch = scoreCardMatch(
+    {
+      game: "Pokemon",
+      card: "Umbreon ex",
+      number: "161",
+    },
+    {
+      game: "pokemon",
+      name: "Jangmo-o",
+      number: "161",
+    },
+  );
+
+  assert.ok(exactMatch.score >= 85);
+  assert.ok(numberOnlyMatch.score < 10);
+  assert.ok(exactMatch.score > numberOnlyMatch.score);
+});
+
+test("number-only distractors are pruned when a strong identity match exists", () => {
+  const candidates = [
+    {
+      id: "umbreon-161",
+      name: "Umbreon ex",
+      matchScore: 88,
+      matchReasons: ["game match", "exact name", "collector number match"],
+    },
+    {
+      id: "lickitung-161",
+      name: "Lickitung",
+      matchScore: 8,
+      matchReasons: ["game match", "collector number match", "name conflict"],
+    },
+  ];
+
+  const pruned = pruneWeakDistractors(candidates);
+
+  assert.equal(pruned.length, 1);
+  assert.equal(pruned[0].id, "umbreon-161");
 });
 
 test("candidate dedupe keeps one copy and preserves lookup stages", () => {
