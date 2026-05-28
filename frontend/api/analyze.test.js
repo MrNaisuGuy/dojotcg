@@ -333,8 +333,8 @@ test("conflicting set_id penalizes but does not collapse a number and name match
 
   assert.equal(match.confidenceReason, "exact game + number + name match");
   assert.ok(match.conflictingFields.includes("set"));
-  assert.ok(match.score >= 60);
-  assert.ok(match.score < 88);
+  assert.ok(match.capsApplied.some((cap) => cap.reason === "set conflict cap"));
+  assert.ok(match.score <= 25);
 });
 
 test("collector number alone cannot produce high confidence", () => {
@@ -353,8 +353,30 @@ test("collector number alone cannot produce high confidence", () => {
 
   assert.equal(match.confidenceReason, "collector number only match");
   assert.ok(match.conflictingFields.includes("name"));
-  assert.ok(match.score < 10);
+  assert.ok(match.score <= 10);
   assert.doesNotMatch(match.reasons?.join(" ") || "", /100% confident/);
+});
+
+test("set and number match with wrong name is capped by name conflict", () => {
+  const match = scoreCardMatch(
+    {
+      game: "Pokemon",
+      card: "Umbreon ex",
+      setId: "sv8",
+      number: "161",
+    },
+    {
+      game: "pokemon",
+      name: "Lickitung",
+      setId: "sv8",
+      number: "161",
+    },
+  );
+
+  assert.equal(match.confidenceReason, "exact game + set_id + number match");
+  assert.ok(match.conflictingFields.includes("name"));
+  assert.ok(match.capsApplied.some((cap) => cap.reason === "name conflict cap"));
+  assert.ok(match.score <= 20);
 });
 
 test("exact name and collector number beats collector-number-only candidates", () => {

@@ -195,6 +195,9 @@ export function scoreCandidate(matchContext, candidateMatchData) {
     confidenceReason = "game only match";
   }
 
+  const baseScore = confidence;
+  const capsApplied = [];
+
   scoreBreakdown.push({ reason: confidenceReason, delta: confidence });
 
   const adjustments = [
@@ -232,19 +235,22 @@ export function scoreCandidate(matchContext, candidateMatchData) {
     scoreBreakdown.push({ reason: `${field} conflict`, delta });
   }
 
+  function applyCap(label, cap) {
+    if (confidence <= cap) return;
+
+    capsApplied.push({ reason: label, maxConfidence: cap });
+    scoreBreakdown.push({ reason: label, delta: cap - confidence });
+    confidence = cap;
+  }
+
   if (numberMatch && !exactNameMatch && !fuzzyNameMatch && !setIdMatch && !setNameMatch) {
-    const cap = nameConflict || setConflict ? 0.08 : 0.15;
-
-    if (confidence > cap) {
-      scoreBreakdown.push({ reason: "collector number only cap", delta: cap - confidence });
-      confidence = cap;
-    }
+    applyCap("collector number only cap", 0.1);
   }
 
-  if ((nameConflict || setConflict || conflictingFields.includes("number") || conflictingFields.includes("printed_total")) && confidence > 0.7) {
-    scoreBreakdown.push({ reason: "identity conflict cap", delta: 0.7 - confidence });
-    confidence = 0.7;
-  }
+  if (nameConflict) applyCap("name conflict cap", 0.2);
+  if (setConflict) applyCap("set conflict cap", 0.25);
+  if (conflictingFields.includes("number")) applyCap("number conflict cap", 0.25);
+  if (conflictingFields.includes("printed_total")) applyCap("printed total conflict cap", 0.5);
 
   if (gameMatch) reasons.push("game match");
   if (externalIdMatch) reasons.push("external_id match");
@@ -268,6 +274,9 @@ export function scoreCandidate(matchContext, candidateMatchData) {
     confidenceReason,
     matchedFields,
     conflictingFields,
+    baseScore: Math.round(baseScore * 1000) / 1000,
+    capsApplied,
+    finalScore: Math.round(clampedConfidence * 1000) / 10,
     scoreBreakdown,
   };
 }

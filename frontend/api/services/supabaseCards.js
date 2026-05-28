@@ -294,6 +294,9 @@ function formatSupabaseCardMatch(card, cardData, matchContext, lookupStage) {
           matchDebug: {
             confidence: match.confidence,
             confidenceReason: match.confidenceReason,
+            baseScore: match.baseScore,
+            capsApplied: match.capsApplied,
+            finalScore: match.finalScore,
             matchedFields: match.matchedFields,
             conflictingFields: match.conflictingFields,
             scoreBreakdown: match.scoreBreakdown,
