@@ -31,7 +31,7 @@
 - Pokemon card sync from PokemonTCG into Supabase.
 - Supabase-first card lookup for Pokemon identity and images.
 - Local card image URLs served from the synced card catalog.
-- External lookup fallback can be re-enabled with `ENABLE_EXTERNAL_CARD_LOOKUPS=true`.
+- Candidate images and prices come from the synced Supabase card catalog.
 - Candidate match display with match score and match reasons.
 - Raw scan result display.
 

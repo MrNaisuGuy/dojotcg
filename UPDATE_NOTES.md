@@ -1,5 +1,22 @@
 # DojoTCG Update Notes
 
+## 2026-05-28
+
+OpenAI prompt tightening based on what Supabase already knows:
+
+- Changed the prompt to ask for visible lookup fields only. OpenAI now reads the card like a label, while Supabase does the database matching.
+- Removed requests for market price, condition, product ID, database ID, and variant. Those are database/provider facts, so guessing them from an image could create bad matches.
+- Made JSON-only output stricter and smaller. This makes the scanner response easier to parse and avoids wasting time on extra text.
+- Told OpenAI to prefer exact printed identifiers over names. Card numbers, set codes, and One Piece card IDs are usually better lookup keys than a guessed name.
+- Kept confidence scores focused on visual readability. A score now means "how clearly the image showed this," not "how sure the database match is."
+- Added clearer Pokemon handling for Japanese and Korean cards. OpenAI keeps the printed local name and only guesses the English name when it can do that confidently.
+- Tightened One Piece recognition around the bottom-right card ID. The ID like `OP01-001` or `ST10-003` is the strongest key Supabase can use.
+- Tightened MTG recognition around collector number and set code. Those fields are more useful for Scryfall/Supabase matching than rules text.
+- Limited `visibleText` to a few useful snippets. This keeps debug context without sending bulky raw OCR-style text through the whole scan response.
+- Switched vision detail to `auto` first, with `high` only as a fallback. Small clean images should scan faster, while difficult images still get a second chance.
+- Added candidate deduplication for scan results. If the same card is found by multiple lookup paths, the app keeps one copy and remembers the strongest match reason.
+- Added a frontend safety check so the best match cannot also appear again as a duplicate candidate card. The results page should now show each matched card only once.
+
 ## 2026-05-27 13:16:54 UTC
 
 Tonight was a major data-pipeline pass.
