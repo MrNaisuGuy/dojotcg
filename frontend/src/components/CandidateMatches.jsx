@@ -154,11 +154,6 @@ function CandidateCard({ candidate, isBest }) {
     /exact name|similar name/i
   );
 
-  const setMatched = hasMatchReason(
-    candidate,
-    /exact set|strong set|set match/i
-  );
-
   const numberMatched = hasMatchReason(
     candidate,
     /collector number/i
@@ -328,11 +323,6 @@ function CandidateCard({ candidate, isBest }) {
         <MatchCheck
           label="Card Name"
           matched={cardNameMatched}
-        />
-
-        <MatchCheck
-          label="Set"
-          matched={setMatched}
         />
 
         <MatchCheck

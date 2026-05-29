@@ -11,6 +11,7 @@ import {
   getCollectorNumberLookupValues,
   getGameKey,
   normalizeNumber,
+  normalizeCardName,
   normalizeOnePieceCardId,
   normalizePrintedTotal,
   parseCollectorNumber,
@@ -219,6 +220,7 @@ function hasReason(candidate, pattern) {
 function isStrongIdentityMatch(candidate) {
   return candidate.matchScore >= 85 && (
     hasReason(candidate, /external_id match/i) ||
+    hasReason(candidate, /printed card id match/i) ||
     (hasReason(candidate, /exact name/i) && hasReason(candidate, /collector number/i)) ||
     (hasReason(candidate, /set (?:id |name )?match/i) && hasReason(candidate, /collector number/i))
   );
@@ -229,8 +231,9 @@ function isCollectorNumberOnlyDistractor(candidate) {
   const hasName = hasReason(candidate, /exact name|similar name/i);
   const hasSet = hasReason(candidate, /set (?:id |name )?match/i);
   const hasExternalId = hasReason(candidate, /external_id match/i);
+  const hasPrintedCardId = hasReason(candidate, /printed card id match/i);
 
-  return hasNumber && !hasName && !hasSet && !hasExternalId;
+  return hasNumber && !hasName && !hasSet && !hasExternalId && !hasPrintedCardId;
 }
 
 function isLowScoreNameConflict(candidate) {
@@ -291,6 +294,38 @@ function formatSupabaseCardMatch(card, cardData, matchContext, lookupStage) {
   endTimer("analyze:candidate_scoring");
   const dedupeKeys = getCandidateDedupeKeys(candidate);
 
+  if (isAnalyzeDebugEnabled()) {
+    console.info("analyze:candidate_score", {
+      candidateName: candidate.name,
+      candidateSet: candidate.set,
+      candidateCollectorNumber: candidate.number,
+      game: match.identityDebug?.game,
+      extractedCardName: match.identityDebug?.scannedName,
+      displayName: match.identityDebug?.displayName,
+      oracleName: match.identityDebug?.oracleName,
+      chosenCardName: match.identityDebug?.chosenCardName,
+      lookupNames: match.identityDebug?.lookupNames,
+      lookupPathUsed: lookupStage,
+      rawExtractedCardNumber: match.identityDebug?.rawExtractedCardNumber,
+      normalizedExtractedCollectorNumber: match.identityDebug?.normalizedExtractedCollectorNumber,
+      cardNumber: match.identityDebug?.scannedCardId,
+      printed_total: match.identityDebug?.printedTotal,
+      candidateCollectorNumber: match.identityDebug?.candidateCollectorNumber,
+      setCode: match.identityDebug?.setCode,
+      rarity: match.identityDebug?.rarity,
+      nameScore: match.identityDebug?.nameScore,
+      displayNameScore: match.identityDebug?.displayNameScore,
+      oracleNameScore: match.identityDebug?.oracleNameScore,
+      bestNameScore: match.identityDebug?.bestNameScore,
+      numberScore: match.identityDebug?.numberScore,
+      printedTotalScore: match.identityDebug?.printedTotalScore,
+      setCodeScore: match.identityDebug?.setCodeScore,
+      rarityScore: match.identityDebug?.rarityScore,
+      finalScore: match.finalScore,
+      rejectionOrCapReason: match.identityDebug?.rejectionReason || match.capsApplied?.map((cap) => cap.reason).join(", ") || null,
+    });
+  }
+
   return {
     ...candidate,
     regionalPrices,
@@ -299,6 +334,7 @@ function formatSupabaseCardMatch(card, cardData, matchContext, lookupStage) {
     ...(isAnalyzeDebugEnabled()
       ? {
           scoreDebug: {
+            ...match.identityDebug,
             name: candidate.name,
             number: candidate.number,
             matchScore: match.finalScore,
@@ -307,6 +343,7 @@ function formatSupabaseCardMatch(card, cardData, matchContext, lookupStage) {
             capsApplied: match.capsApplied,
             conflictingFields: match.conflictingFields,
             matchReasons: match.reasons,
+            identityDebug: match.identityDebug,
           },
         }
       : {}),
@@ -315,6 +352,7 @@ function formatSupabaseCardMatch(card, cardData, matchContext, lookupStage) {
     ...(isAnalyzeDebugEnabled()
       ? {
           matchDebug: {
+            ...match.identityDebug,
             confidence: match.confidence,
             confidenceReason: match.confidenceReason,
             baseScore: match.baseScore,
@@ -324,6 +362,7 @@ function formatSupabaseCardMatch(card, cardData, matchContext, lookupStage) {
             conflictingFields: match.conflictingFields,
             pokemonDebugReasons: match.pokemonDebugReasons,
             scoreBreakdown: match.scoreBreakdown,
+            identityDebug: match.identityDebug,
             dedupeKeys,
             lookupStages: [lookupStage].filter(Boolean),
           },
@@ -337,7 +376,7 @@ function getSetIdLookupValues(cardData, onePieceCardId, gameKey) {
   const values = [
     cardData.setId,
     cardData.set_id,
-    gameKey === "pokemon" ? null : cardData.setCode,
+    gameKey === "mtg" ? cardData.setCode : null,
     gameKey === "onepiece" ? onePieceSetId : null,
   ]
     .map((value) => String(value || "").trim())
@@ -351,7 +390,7 @@ function getNumberLookupValues(cardData, onePieceCardId) {
   const onePieceNumber = onePieceCardId?.match(/-(\d{3})$/)?.[1];
 
   return uniqueValues([
-    ...getCollectorNumberLookupValues(cardData.collectorNumber || cardData.number),
+    ...getCollectorNumberLookupValues(cardData.cardNumber || cardData.collectorNumber || cardData.number),
     onePieceNumber,
     onePieceNumber ? normalizeNumber(onePieceNumber) : null,
   ]);
@@ -372,7 +411,7 @@ function getNameLookupValues(cardData) {
     .map((value) => String(value || "").trim())
     .filter(Boolean);
   const normalizedNames = exactNames
-    .map((value) => value.replace(/[,()]/g, " ").replace(/\s+/g, " ").trim())
+    .map((value) => normalizeCardName(value))
     .filter(Boolean);
 
   return uniqueValues([...exactNames, ...normalizedNames]);
@@ -387,8 +426,16 @@ function getLowerNameLookupValues(names) {
 function getFuzzyNamePatterns(names) {
   return uniqueValues(names.flatMap((name) => {
     const normalizedName = String(name || "").trim().replace(/[,()]/g, " ").replace(/\s+/g, " ");
+    const normalizedCardName = normalizeCardName(name);
 
-    return normalizedName ? [normalizedName, `${normalizedName}%`, `%${normalizedName}%`] : [];
+    return uniqueValues([
+      normalizedName,
+      normalizedCardName,
+      normalizedName ? `${normalizedName}%` : null,
+      normalizedName ? `%${normalizedName}%` : null,
+      normalizedCardName ? `${normalizedCardName}%` : null,
+      normalizedCardName ? `%${normalizedCardName}%` : null,
+    ]);
   }));
 }
 
@@ -411,7 +458,7 @@ async function findExactLowerNameMatches({ supabase, gameKey, names, cardData, m
     return {
       candidates: formatted.candidates,
       dedupeDebug: formatted.dedupeDebug,
-      searchQuery: `fallback game=${gameKey} | lower(name) in (${lowerNames.join(", ")})`,
+      searchQuery: `exact name game=${gameKey} | lower(name) in (${lowerNames.join(", ")})`,
       usedFallback: false,
     };
   } catch (error) {
@@ -434,7 +481,7 @@ async function findExactLowerNameMatches({ supabase, gameKey, names, cardData, m
     return {
       candidates: formatted.candidates,
       dedupeDebug: formatted.dedupeDebug,
-      searchQuery: `fallback game=${gameKey} | exact name in (${names.join(", ")})`,
+      searchQuery: `exact name game=${gameKey} | name in (${names.join(", ")})`,
       usedFallback: true,
     };
   }
@@ -486,15 +533,16 @@ export async function findLocalCandidates(cardData, supabase) {
   const matchTarget = getMatchTarget(cardData);
   const matchContext = buildMatchContext(cardData);
   const gameKey = getGameKey(cardData.game);
-  const { printedTotal } = parseCollectorNumber(cardData.collectorNumber || cardData.number);
+  const { printedTotal } = parseCollectorNumber(cardData.cardNumber || cardData.collectorNumber || cardData.number);
   const onePieceCardId = gameKey === "onepiece"
-    ? normalizeOnePieceCardId(cardData.cardID || cardData.cardId || cardData.collectorNumber || cardData.number)
+    ? normalizeOnePieceCardId(cardData.cardID || cardData.cardId || cardData.cardNumber || cardData.collectorNumber || cardData.number)
     : null;
   const numberLookupValues = getNumberLookupValues(cardData, onePieceCardId);
   const externalIdLookupValues = getExternalIdLookupValues(cardData, onePieceCardId);
   const setIdLookupValues = getSetIdLookupValues(cardData, onePieceCardId, gameKey);
   const targetPrintedTotal = normalizePrintedTotal(cardData.printedTotal) || printedTotal;
   const names = getNameLookupValues(cardData);
+  let exactNameAttempted = false;
 
   if (!supabase) {
     endTimer("analyze:supabase_lookup");
@@ -505,10 +553,58 @@ export async function findLocalCandidates(cardData, supabase) {
     };
   }
 
+  if (gameKey === "mtg" && setIdLookupValues.length > 0 && numberLookupValues.length > 0) {
+    startTimer("analyze:supabase_exact_lookup");
+    const { data, describe } = await runCandidateQuery({
+      supabase,
+      gameKey,
+      limit: 10,
+      describe: `game=${gameKey} | set_id in (${setIdLookupValues.join(", ")}) | number in (${numberLookupValues.join(", ")})`,
+      apply: (query) => query
+        .in("set_id", setIdLookupValues)
+        .in("number", numberLookupValues),
+    });
+    const formatted = formatMatches(data, cardData, matchContext, 5, "exact game + set_id + number");
+    endTimer("analyze:supabase_exact_lookup");
+
+    if (formatted.candidates.length > 0) {
+      endTimer("analyze:supabase_lookup");
+      return {
+        candidates: formatted.candidates,
+        searchQuery: describe,
+        matchTarget,
+        dedupeDebug: formatted.dedupeDebug,
+      };
+    }
+  }
+
+  if (names.length > 0 && gameKey !== "unknown") {
+    exactNameAttempted = true;
+    startTimer("analyze:supabase_exact_lookup");
+    const exactNameResult = await findExactLowerNameMatches({
+      supabase,
+      gameKey,
+      names,
+      cardData,
+      matchContext,
+    });
+    endTimer("analyze:supabase_exact_lookup");
+
+    if (exactNameResult.candidates.length > 0) {
+      endTimer("analyze:supabase_lookup");
+      return {
+        candidates: exactNameResult.candidates,
+        searchQuery: exactNameResult.searchQuery,
+        matchTarget,
+        dedupeDebug: exactNameResult.dedupeDebug,
+      };
+    }
+  }
+
   const stagedQueries = [];
 
   // Fast path: simple equality predicates that match composite btree indexes.
-  if (gameKey !== "unknown" && setIdLookupValues.length > 0 && numberLookupValues.length > 0) {
+  if (names.length === 0 && gameKey !== "unknown" && setIdLookupValues.length > 0 && numberLookupValues.length > 0) {
     stagedQueries.push({
       stage: "exact game + set_id + number",
       describe: `game=${gameKey} | set_id in (${setIdLookupValues.join(", ")}) | number in (${numberLookupValues.join(", ")})`,
@@ -519,7 +615,7 @@ export async function findLocalCandidates(cardData, supabase) {
     });
   }
 
-  if (gameKey !== "unknown" && numberLookupValues.length > 0) {
+  if (names.length === 0 && gameKey !== "unknown" && numberLookupValues.length > 0) {
     stagedQueries.push({
       stage: "exact game + number",
       describe: `game=${gameKey} | number in (${numberLookupValues.join(", ")})`,
@@ -528,7 +624,7 @@ export async function findLocalCandidates(cardData, supabase) {
     });
   }
 
-  if (gameKey !== "unknown" && externalIdLookupValues.length > 0) {
+  if (names.length === 0 && gameKey !== "unknown" && externalIdLookupValues.length > 0) {
     stagedQueries.push({
       stage: "exact external_id",
       describe: `game=${gameKey} | external_id in (${externalIdLookupValues.join(", ")})`,
@@ -573,25 +669,27 @@ export async function findLocalCandidates(cardData, supabase) {
   endTimer("analyze:supabase_lookup");
   startTimer("analyze:fallback_lookup");
 
-  const exactNameResult = await findExactLowerNameMatches({
-    supabase,
-    gameKey,
-    names,
-    cardData,
-    matchContext,
-  });
+  if (!exactNameAttempted) {
+    const exactNameResult = await findExactLowerNameMatches({
+      supabase,
+      gameKey,
+      names,
+      cardData,
+      matchContext,
+    });
 
-  if (exactNameResult.candidates.length > 0) {
-    endTimer("analyze:fallback_lookup");
-    return {
-      candidates: exactNameResult.candidates,
-      searchQuery: exactNameResult.searchQuery,
-      matchTarget,
-      dedupeDebug: exactNameResult.dedupeDebug,
-    };
+    if (exactNameResult.candidates.length > 0) {
+      endTimer("analyze:fallback_lookup");
+      return {
+        candidates: exactNameResult.candidates,
+        searchQuery: exactNameResult.searchQuery,
+        matchTarget,
+        dedupeDebug: exactNameResult.dedupeDebug,
+      };
+    }
   }
 
-  for (const number of numberLookupValues) {
+  if (names.length === 0) for (const number of numberLookupValues) {
     const numberPrefixQuery = applyKnownGameFilter(createSupabaseCardQuery(supabase), gameKey)
       .ilike("number", `${number}/%`)
       .limit(8);

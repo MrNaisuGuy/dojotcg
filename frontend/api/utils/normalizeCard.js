@@ -14,6 +14,20 @@ export function normalizeValue(value) {
     .trim();
 }
 
+export function normalizeCardName(value) {
+  return String(value || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[’‘`´]/g, "'")
+    .replace(/[-‐‑‒–—―]/g, " ")
+    .replace(/['"]/g, "")
+    .replace(/[♀♂]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function normalizeNumber(value) {
   const raw = String(value || "")
     .toLowerCase()
@@ -106,16 +120,31 @@ export function normalizeExtractedName(value, collectorNumber) {
 }
 
 export function normalizeExtractedCardData(parsed) {
-  const collectorNumber = parsed.collectorNumber || parsed.number || null;
-  const set = parsed.setName || parsed.set || parsed.setCode || null;
-  const englishName = normalizeExtractedName(parsed.englishNameGuess, collectorNumber);
-  const card = normalizeExtractedName(parsed.name || parsed.card, collectorNumber) || englishName;
+  const gameKey = getGameKey(parsed.game);
+  const rawCardNumber = parsed.cardNumber || parsed.collectorNumber || parsed.number || null;
+  const parsedNumber = parseCollectorNumber(rawCardNumber);
+  const collectorNumber = gameKey === "pokemon"
+    ? parsedNumber.number || null
+    : rawCardNumber;
+  const printedTotal = parsed.printedTotal ?? parsed.printed_total ?? parsedNumber.printedTotal ?? null;
+  const set = parsed.setCode || null;
+  const englishName = normalizeExtractedName(parsed.englishNameGuess, rawCardNumber);
+  const displayName = normalizeExtractedName(parsed.displayName, rawCardNumber);
+  const oracleName = normalizeExtractedName(parsed.oracleName, rawCardNumber);
+  const extractedName = parsed.cardName || parsed.name || parsed.card;
+  const extractedCardName = normalizeExtractedName(extractedName, rawCardNumber);
+  const card = gameKey === "mtg"
+    ? displayName || extractedCardName || englishName || oracleName
+    : extractedCardName || oracleName || displayName || englishName;
   const onePieceCardId = normalizeOnePieceCardId(
     parsed.cardID || parsed.cardId || collectorNumber || parsed.setCode,
   );
 
   return {
     ...parsed,
+    cardName: card,
+    displayName,
+    oracleName,
     name: card,
     card,
     localName: parsed.localName || null,
@@ -124,11 +153,18 @@ export function normalizeExtractedCardData(parsed) {
     englishNameConfidence: parsed.englishNameConfidence ?? null,
     number: collectorNumber,
     collectorNumber,
-    printedTotal: parsed.printedTotal ?? null,
+    cardNumber: rawCardNumber,
+    printedTotal,
+    printed_total: printedTotal,
     set,
-    setName: parsed.setName || null,
+    setName: null,
     setCode: parsed.setCode || null,
-    cardID: onePieceCardId || parsed.cardID || parsed.cardId || null,
+      cardID: onePieceCardId || parsed.cardID || parsed.cardId || null,
+    overallAccuracy: parsed.overallAccuracy ?? parsed.confidence ?? null,
+    gameConfidence: parsed.gameConfidence ?? parsed.confidence ?? null,
+    nameConfidence: parsed.nameConfidence ?? parsed.confidence ?? null,
+    collectorNumberConfidence: parsed.collectorNumberConfidence ?? parsed.confidence ?? null,
+    setConfidence: parsed.setConfidence ?? parsed.confidence ?? null,
   };
 }
 

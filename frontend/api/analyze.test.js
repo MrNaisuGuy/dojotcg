@@ -4,8 +4,10 @@ import { estimateRegionalPrices, getPokemonPriceTier } from "./analyze.js";
 import {
   buildCandidateMatchData,
   buildMatchContext,
+  getLocalLookupNames,
   scoreCandidate,
 } from "./utils/cardScoring.js";
+import { normalizeCardName, normalizeExtractedCardData } from "./utils/normalizeCard.js";
 import { dedupeCandidateMatches, pruneWeakDistractors } from "./services/supabaseCards.js";
 
 function pokemonCandidate(overrides) {
@@ -182,6 +184,15 @@ test("Missing price returns null regional estimates", () => {
   assert.equal(prices.pricingSource, "missing_english_price");
 });
 
+test("card name normalization removes punctuation, accents, symbols, and dash differences", () => {
+  assert.equal(normalizeCardName("Ho-Oh"), "ho oh");
+  assert.equal(normalizeCardName("Ho Oh"), "ho oh");
+  assert.equal(normalizeCardName("Nidoran♀"), "nidoran");
+  assert.equal(normalizeCardName("Farfetch'd"), "farfetchd");
+  assert.equal(normalizeCardName("Master-Weaver Web Protector"), "master weaver web protector");
+  assert.equal(normalizeCardName("Charizard EX"), "charizard ex");
+});
+
 function scoreCardMatch(cardData, candidate) {
   return scoreCandidate(
     buildMatchContext({
@@ -211,9 +222,9 @@ test("exact game + set_id + number match scores very high", () => {
     },
   );
 
-  assert.equal(match.confidenceReason, "pokemon exact name + collector number match");
+  assert.equal(match.confidenceReason, "pokemon weighted visible-field match");
   assert.ok(match.score >= 90);
-  assert.ok(match.score <= 98);
+  assert.ok(match.score <= 99);
   assert.ok(match.matchedFields.includes("set_id"));
   assert.ok(match.matchedFields.includes("number"));
 });
@@ -232,7 +243,7 @@ test("exact game + number + exact normalized name scores high", () => {
     },
   );
 
-  assert.equal(match.confidenceReason, "exact game + number + name match");
+  assert.equal(match.confidenceReason, "mtg weighted visible-field match");
   assert.ok(match.score >= 85);
   assert.ok(match.score <= 95);
 });
@@ -240,16 +251,14 @@ test("exact game + number + exact normalized name scores high", () => {
 test("exact external_id match scores very high", () => {
   const match = scoreCardMatch(
     {
-      game: "One Piece",
-      card: "Monkey.D.Luffy",
-      cardID: "OP05-119",
-      number: "119",
+      game: "Magic: The Gathering",
+      card: "Lightning Bolt",
+      externalId: "scryfall-123",
     },
     {
-      game: "onepiece",
-      name: "Monkey.D.Luffy",
-      externalId: "OP05-119",
-      number: "119",
+      game: "mtg",
+      name: "Lightning Bolt",
+      externalId: "scryfall-123",
     },
   );
 
@@ -270,9 +279,281 @@ test("fuzzy name only scores low to medium", () => {
     },
   );
 
-  assert.equal(match.confidenceReason, "fuzzy name + game match");
+  assert.equal(match.confidenceReason, "pokemon weighted visible-field match");
   assert.ok(match.score >= 40);
   assert.ok(match.score <= 70);
+});
+
+test("One Piece exact name and printed card id scores very high", () => {
+  const match = scoreCardMatch(
+    {
+      game: "One Piece",
+      card: "Nami",
+      collectorNumber: "OP01-016",
+      rarity: "R",
+    },
+    {
+      game: "onepiece",
+      name: "Nami",
+      externalId: "OP01-016",
+      number: "016",
+      rarity: "R",
+    },
+  );
+
+  assert.equal(match.confidenceReason, "onepiece weighted visible-field match");
+  assert.ok(match.score >= 90);
+  assert.ok(match.matchedFields.includes("printed_card_id"));
+  assert.ok(match.matchedFields.includes("printed_card_id_number"));
+});
+
+test("One Piece printed card id alone ranks strongly", () => {
+  const match = scoreCardMatch(
+    {
+      game: "One Piece",
+      collectorNumber: "OP01-016",
+    },
+    {
+      game: "onepiece",
+      name: "Nami",
+      externalId: "OP01-016",
+      number: "016",
+    },
+  );
+
+  assert.equal(match.confidenceReason, "onepiece weighted visible-field match");
+  assert.ok(match.score >= 35);
+  assert.ok(match.score <= 45);
+});
+
+test("One Piece printed card id is not capped by generic set conflict", () => {
+  const match = scoreCardMatch(
+    {
+      game: "One Piece",
+      card: "Nami",
+      collectorNumber: "OP01-016",
+      setId: "wrong-set",
+    },
+    {
+      game: "onepiece",
+      name: "Nami",
+      externalId: "OP01-016",
+      setId: "OP01",
+      number: "016",
+    },
+  );
+
+  assert.equal(match.confidenceReason, "onepiece weighted visible-field match");
+  assert.ok(!match.capsApplied.some((cap) => cap.reason === "set conflict cap"));
+  assert.ok(match.score >= 90);
+});
+
+test("One Piece name conflict still caps printed card id matches low", () => {
+  const match = scoreCardMatch(
+    {
+      game: "One Piece",
+      card: "Nami",
+      collectorNumber: "OP01-016",
+    },
+    {
+      game: "onepiece",
+      name: "Zoro",
+      externalId: "OP01-016",
+      number: "016",
+    },
+  );
+
+  assert.ok(match.conflictingFields.includes("name"));
+  assert.ok(match.score <= 20);
+});
+
+test("MTG exact same-name variant remains high without collector number", () => {
+  const match = scoreCardMatch(
+    {
+      game: "Magic: The Gathering",
+      card: "Spectacular Spider-Man",
+    },
+    {
+      game: "mtg",
+      name: "Spectacular Spider-Man",
+      number: "233",
+    },
+  );
+
+  assert.equal(match.confidenceReason, "mtg weighted visible-field match");
+  assert.ok(match.score >= 60);
+  assert.ok(match.score < 100);
+});
+
+test("MTG treatment clue improves same-name variant ranking", () => {
+  const pixelMatch = scoreCardMatch(
+    {
+      game: "Magic: The Gathering",
+      card: "Spectacular Spider-Man",
+      number: "233",
+      visibleText: ["pixel art"],
+    },
+    {
+      game: "mtg",
+      name: "Spectacular Spider-Man",
+      number: "233",
+      priceVariant: "pixel art foil",
+    },
+  );
+  const normalMatch = scoreCardMatch(
+    {
+      game: "Magic: The Gathering",
+      card: "Spectacular Spider-Man",
+      number: "233",
+      visibleText: ["pixel art"],
+    },
+    {
+      game: "mtg",
+      name: "Spectacular Spider-Man",
+      number: "233",
+    },
+  );
+
+  assert.equal(pixelMatch.confidenceReason, "mtg weighted visible-field match");
+  assert.ok(pixelMatch.score > normalMatch.score);
+});
+
+test("MTG wrong-name candidate cannot score high", () => {
+  const match = scoreCardMatch(
+    {
+      game: "Magic: The Gathering",
+      card: "Spectacular Spider-Man",
+      number: "233",
+    },
+    {
+      game: "mtg",
+      name: "Different Hero",
+      number: "233",
+    },
+  );
+
+  assert.ok(match.conflictingFields.includes("name"));
+  assert.ok(match.score <= 20);
+});
+
+test("MTG set code and card number create a deterministic match", () => {
+  const match = scoreCardMatch(
+    {
+      game: "Magic: The Gathering",
+      displayName: "Master Weaver, Web Protector",
+      oracleName: "Arasta of the Endless Web",
+      card: "Arasta of the Endless Web",
+      cardNumber: "0032",
+      setCode: "MAR",
+    },
+    {
+      game: "mtg",
+      name: "Arasta of the Endless Web",
+      setId: "mar",
+      number: "32",
+    },
+  );
+
+  assert.equal(match.confidenceReason, "mtg set code + card number match");
+  assert.equal(match.identityDebug.setCodeScore, 1);
+  assert.equal(match.identityDebug.numberScore, 1);
+  assert.ok(match.score >= 95);
+});
+
+test("MTG exact name, collector number, and rarity scores near-perfect without set name", () => {
+  const match = scoreCardMatch(
+    {
+      game: "Magic: The Gathering",
+      card: "Assault on Osgiliath",
+      cardNumber: "285",
+      rarity: "rare",
+    },
+    {
+      game: "mtg",
+      name: "Assault on Osgiliath",
+      set: "The Lord of the Rings: Tales of Middle-earth",
+      number: "285",
+      rarity: "rare",
+    },
+  );
+
+  assert.equal(match.confidenceReason, "mtg weighted visible-field match");
+  assert.equal(match.identityDebug.nameScore, 1);
+  assert.equal(match.identityDebug.numberScore, 1);
+  assert.equal(match.identityDebug.rarityScore, 1);
+  assert.ok(!match.conflictingFields.includes("printed_total"));
+  assert.ok(match.score >= 95);
+});
+
+test("MTG cardName prefers displayName while oracleName remains alternate lookup", () => {
+  const parsed = normalizeExtractedCardData({
+    game: "Magic: The Gathering",
+    displayName: "Master Weaver, Web Protector",
+    oracleName: "Arasta of the Endless Web",
+    cardName: "Master Weaver, Web Protector",
+    cardNumber: "0032",
+    setCode: "MAR",
+  });
+
+  assert.equal(parsed.cardName, "Master Weaver, Web Protector");
+  assert.equal(parsed.card, "Master Weaver, Web Protector");
+  assert.equal(parsed.oracleName, "Arasta of the Endless Web");
+  assert.deepEqual(getLocalLookupNames(parsed).slice(0, 2), [
+    "Master Weaver, Web Protector",
+    "Arasta of the Endless Web",
+  ]);
+});
+
+test("MTG oracleName can score alternate-name database matches when set code and number confirm", () => {
+  const match = scoreCardMatch(
+    {
+      game: "Magic: The Gathering",
+      displayName: "Master Weaver, Web Protector",
+      oracleName: "Arasta of the Endless Web",
+      card: "Master Weaver, Web Protector",
+      cardNumber: "0032",
+      setCode: "MAR",
+    },
+    {
+      game: "mtg",
+      name: "Arasta of the Endless Web",
+      setId: "mar",
+      number: "32",
+    },
+  );
+
+  assert.equal(match.confidenceReason, "mtg set code + card number match");
+  assert.equal(match.identityDebug.nameScore < 0.65, true);
+  assert.equal(match.identityDebug.oracleNameScore, 1);
+  assert.equal(match.identityDebug.bestNameScore, 1);
+  assert.ok(match.score >= 95);
+});
+
+test("punctuation-normalized names score as exact or near-exact matches", () => {
+  const examples = [
+    ["Ho-Oh", "Ho Oh"],
+    ["Nidoran♀", "Nidoran"],
+    ["Farfetch'd", "Farfetchd"],
+    ["Master Weaver, Web Protector", "Master-Weaver Web Protector"],
+    ["Charizard ex", "Charizard EX"],
+  ];
+
+  for (const [scanName, candidateName] of examples) {
+    const match = scoreCardMatch(
+      {
+        game: "Pokemon",
+        card: scanName,
+        number: "1",
+      },
+      {
+        game: "pokemon",
+        name: candidateName,
+        number: "1",
+      },
+    );
+
+    assert.ok(match.identityDebug.nameScore >= 0.95, `${scanName} vs ${candidateName}`);
+  }
 });
 
 test("correct game but weak match does not create meaningful confidence", () => {
@@ -289,7 +570,6 @@ test("correct game but weak match does not create meaningful confidence", () => 
     },
   );
 
-  assert.equal(match.confidenceReason, "game only match");
   assert.ok(match.score >= 1);
   assert.ok(match.score < 30);
 });
@@ -310,7 +590,7 @@ test("missing optional metadata does not crush a strong match", () => {
     },
   );
 
-  assert.equal(match.confidenceReason, "pokemon exact name + collector number match");
+  assert.equal(match.confidenceReason, "pokemon weighted visible-field match");
   assert.ok(match.score >= 90);
   assert.deepEqual(match.conflictingFields, []);
 });
@@ -331,10 +611,10 @@ test("conflicting set_id penalizes but does not collapse a number and name match
     },
   );
 
-  assert.equal(match.confidenceReason, "pokemon exact name + collector number match");
-  assert.ok(match.conflictingFields.includes("set"));
-  assert.ok(match.capsApplied.some((cap) => cap.reason === "set conflict cap"));
-  assert.ok(match.score <= 25);
+  assert.equal(match.confidenceReason, "pokemon weighted visible-field match");
+  assert.ok(!match.conflictingFields.includes("set"));
+  assert.ok(!match.capsApplied.some((cap) => cap.reason === "set conflict cap"));
+  assert.ok(match.score >= 70);
 });
 
 test("collector number alone cannot produce high confidence", () => {
@@ -351,10 +631,72 @@ test("collector number alone cannot produce high confidence", () => {
     },
   );
 
-  assert.equal(match.confidenceReason, "collector number only match");
+  assert.equal(match.confidenceReason, "pokemon weighted visible-field match");
   assert.ok(match.conflictingFields.includes("name"));
   assert.ok(match.score <= 10);
   assert.doesNotMatch(match.reasons?.join(" ") || "", /100% confident/);
+});
+
+test("Pokemon name, set, and collector number dominate wrong same-number candidates", () => {
+  const exactMatch = scoreCardMatch(
+    {
+      game: "Pokemon",
+      card: "Umbreon ex",
+      setName: "Prismatic Evolutions",
+      number: "161/131",
+    },
+    {
+      game: "pokemon",
+      name: "Umbreon ex",
+      set: "Prismatic Evolutions",
+      number: "161/131",
+      printedTotal: 131,
+    },
+  );
+  const wrongSameNumber = scoreCardMatch(
+    {
+      game: "Pokemon",
+      card: "Umbreon ex",
+      setName: "Prismatic Evolutions",
+      number: "161/131",
+    },
+    {
+      game: "pokemon",
+      name: "Lickitung",
+      set: "Different Set",
+      number: "161/131",
+      printedTotal: 131,
+    },
+  );
+
+  assert.ok(exactMatch.score >= 90);
+  assert.ok(wrongSameNumber.score <= 10);
+  assert.ok(exactMatch.identityDebug.nameScore > 0.9);
+  assert.ok(wrongSameNumber.identityDebug.nameScore < 0.65);
+});
+
+test("Pokemon cardNumber with printed total matches candidate collector number only", () => {
+  const match = scoreCardMatch(
+    {
+      game: "Pokemon",
+      card: "Umbreon ex",
+      cardNumber: "161/131",
+      printed_total: 131,
+    },
+    {
+      game: "pokemon",
+      name: "Umbreon ex",
+      number: "161",
+      printedTotal: 131,
+    },
+  );
+
+  assert.equal(match.identityDebug.rawExtractedCardNumber, "161/131");
+  assert.equal(match.identityDebug.normalizedExtractedCollectorNumber, "161");
+  assert.equal(match.identityDebug.candidateCollectorNumber, "161");
+  assert.equal(match.identityDebug.numberScore, 1);
+  assert.equal(match.identityDebug.printedTotalScore, 1);
+  assert.ok(match.score >= 95);
 });
 
 test("set and number match with wrong name is capped by name conflict", () => {
@@ -373,9 +715,8 @@ test("set and number match with wrong name is capped by name conflict", () => {
     },
   );
 
-  assert.equal(match.confidenceReason, "exact game + set_id + number match");
+  assert.equal(match.confidenceReason, "pokemon weighted visible-field match");
   assert.ok(match.conflictingFields.includes("name"));
-  assert.ok(match.capsApplied.some((cap) => cap.reason === "name conflict cap"));
   assert.ok(match.score <= 20);
 });
 
@@ -405,7 +746,7 @@ test("exact name and collector number beats collector-number-only candidates", (
     },
   );
 
-  assert.ok(exactMatch.score >= 85);
+  assert.ok(exactMatch.score >= 70);
   assert.ok(numberOnlyMatch.score < 10);
   assert.ok(exactMatch.score > numberOnlyMatch.score);
 });
@@ -426,9 +767,9 @@ test("setCode mismatch does not cap exact name and collector number match", () =
     },
   );
 
-  assert.equal(match.confidenceReason, "pokemon exact name + collector number match");
+  assert.equal(match.confidenceReason, "pokemon weighted visible-field match");
   assert.ok(!match.conflictingFields.includes("set"));
-  assert.ok(match.score >= 85);
+  assert.ok(match.score >= 70);
 });
 
 test("Pokemon printed total conflict does not crush exact name and collector number", () => {
@@ -447,10 +788,10 @@ test("Pokemon printed total conflict does not crush exact name and collector num
     },
   );
 
-  assert.equal(match.confidenceReason, "pokemon exact name + collector number match");
+  assert.equal(match.confidenceReason, "pokemon weighted visible-field match");
   assert.ok(match.conflictingFields.includes("printed_total"));
   assert.ok(!match.capsApplied.some((cap) => cap.reason === "printed total conflict cap"));
-  assert.ok(match.score >= 85);
+  assert.ok(match.score >= 70);
 });
 
 test("Pokemon debug reasons include visible-field match details", () => {
@@ -474,7 +815,7 @@ test("Pokemon debug reasons include visible-field match details", () => {
   assert.ok(match.pokemonDebugReasons.includes("pokemon name match"));
   assert.ok(match.pokemonDebugReasons.includes("pokemon collector number match"));
   assert.ok(match.pokemonDebugReasons.includes("pokemon printed total match"));
-  assert.ok(match.pokemonDebugReasons.includes("pokemon set name match"));
+  assert.ok(!match.pokemonDebugReasons.includes("pokemon set name match"));
 });
 
 test("wrong name with same set and collector number is capped and pruned", () => {
@@ -493,9 +834,8 @@ test("wrong name with same set and collector number is capped and pruned", () =>
     },
   );
 
-  assert.equal(match.confidenceReason, "exact game + set_id + number match");
+  assert.equal(match.confidenceReason, "pokemon weighted visible-field match");
   assert.ok(match.conflictingFields.includes("name"));
-  assert.ok(match.capsApplied.some((cap) => cap.reason === "name conflict cap"));
   assert.ok(match.score <= 20);
 });
 

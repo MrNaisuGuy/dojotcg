@@ -26,11 +26,9 @@ function ResultCard({ result }) {
       <p><strong>Game Confidence:</strong> {result.gameConfidence?.toFixed(1) || "Unknown"}%</p>
       <p><strong>Name:</strong> {result.name || "Unknown"}</p>
       <p><strong>Name Confidence:</strong> {result.nameConfidence?.toFixed(1) || "Unknown"}%</p>
-      <p><strong>Collector Number:</strong> {result.collectorNumber || "Unknown"}</p>
+      <p><strong>Card Number:</strong> {result.cardNumber || result.collectorNumber || "Unknown"}</p>
       <p><strong>Collector Number Confidence:</strong> {result.collectorNumberConfidence?.toFixed(1) || "Unknown"}%</p>
       <p><strong>Set Code:</strong> {result.setCode || "Unknown"}</p>
-      <p><strong>Set Name:</strong> {result.setName || "Unknown"}</p>
-      <p><strong>Set Confidence:</strong> {result.setConfidence?.toFixed(1) || "Unknown"}%</p>
       <p><strong>Printed Total:</strong> {result.printedTotal || "Unknown"}</p>
       <p><strong>Language:</strong> {result.language || "Unknown"}</p>
       <p><strong>Rarity:</strong> {result.rarity || "Unknown"}</p>

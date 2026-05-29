@@ -4,120 +4,67 @@ import {
   parseJsonResponse,
 } from "../utils/normalizeCard.js";
 
-const INPUT_TEXT = `Extract only visible lookup fields from this trading card image.
-
-Rules:
-
-Return JSON only.
-Do not infer:
-market price
-condition
-product id
-database id
-provider id
-external_id
-set_id
-hidden/internal identifiers
-Use null for unreadable fields.
-Confidence scores are visual readability scores from 0 to 100.
-Prefer exact printed identifiers over guessed names.
-Do not invent missing values.
-Keep visibleText short and useful.
-
-Game-specific guidance:
-
-Pokemon:
-
-Prioritize:
-card name
-collector number
-printed total
-rarity
-visible set name
-A value like "161/131" should become:
-collectorNumber: "161"
-printedTotal: 131
-Do not treat visible set text as set_id.
-
-One Piece:
-
-Prioritize the printed card ID at the bottom-right.
-IDs may look like:
-OP01-016
-ST10-003
-EB01-012
-PRB01-001
-Read the entire printed ID carefully.
-
-Magic: The Gathering:
-
-Prioritize:
-card name
-collector number
-set code
-rarity
-visible frame/treatment clues
-Variant clues may include:
-showcase
-borderless
-retro frame
-extended art
-pixel art
-foil appearance
-Same-name variants may exist.
+const INPUT_TEXT = `Extract visible trading-card lookup facts only.
+Return JSON only. Use null when unreadable.
+Do not infer market price, condition, external_id, set_id, database id, or provider id.
 
 Return exactly:
 {
 "game": "Pokemon" | "Magic: The Gathering" | "One Piece" | "Unknown",
-"gameConfidence": number,
-"name": string | null,
-"nameConfidence": number,
-"localName": string | null,
-"romanizedName": string | null,
-"englishNameGuess": string | null,
-"englishNameConfidence": number,
-"collectorNumber": string | null,
-"collectorNumberConfidence": number,
-"printedTotal": number | null,
+"cardName": string | null,
+"cardNumber": string | null,
+"printed_total": number | null,
 "setCode": string | null,
-"setName": string | null,
-"setConfidence": number,
+"displayName": string | null,
+"oracleName": string | null,
 "language": string | null,
 "rarity": string | null,
-"cardType": string | null,
-"visibleText": string[],
-"uncertainFields": string[],
-"overallAccuracy": number,
-"notes": string
+"confidence": number
 }
 
-Pokemon:
-- Prioritize card name, collector number, printed total, rarity, and visible set name.
-- For Japanese/Korean cards, localName is the printed title.
-- englishNameGuess is the likely official English card name only if confident.
-- A value like "161/131" should become:
-  - collectorNumber: "161"
-  - printedTotal: 131
-- Do not treat visible set text as set_id.
+If japanese text is visible but not readable, return null for cardName and include "Japanese" for language.
+If korean text is visible but not readable, return null for cardName and include "Korean" for language.
+Romanize non-English text if the script is clearly readable but the language is not English, and include the detected language. For example, if you see clear Japanese text that you can romanize but cannot confidently translate to English, return the romanized text as cardName and "Japanese" as language. Do not return a romanized name if the script is not clearly readable.
+Translate names to English when possible, but do not infer or guess names. For example, if a Pokemon card is in Japanese and you can only read the set code and card number, return those and null for cardName, rather than inferring an English name. If you can read a name but it's in a non-English script, return the name as-is and include the language.
+Pokemon: cardName + cardNumber are best. Use printed_total only when visible, such as 161/131.
+MTG: displayName is the large title line at the top. cardName should equal displayName. oracleName is only a smaller alternate/reskin/oracle subtitle when it is clearly a second card identity, not rules text, type line, flavor text, or any readable line under the title. MTG may have setCode and cardNumber but no printed_total.
+One Piece: printed IDs like OP01-016 or ST10-003 should go in cardNumber. Include rarity only if visibly inferable.
+Do not ask for or infer full setName.`;
 
-One Piece:
-- Inspect the bottom-right first.
-- If a printed ID like OP01-001, ST10-003, EB01-001, PRB01-001, or P-001 is visible, put it in collectorNumber.
-- Read the entire printed ID carefully.
+const VISION_MODEL = "gpt-5-mini";
 
-Magic: The Gathering:
-- Prefer collector number and set code over rules/flavor text.
-- Prioritize card name, collector number, set code, rarity, and visible frame/treatment clues.
-- Variant clues may include showcase, borderless, retro frame, extended art, pixel art, or foil appearance.
-- Same-name variants may exist.
+function getDataUrlByteSize(imageUrl) {
+  const [, base64 = ""] = String(imageUrl || "").split(",", 2);
+  if (!base64) return 0;
 
-visibleText:
-- Keep visibleText short.
-- Max 5 items.`;
+  const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
+  return Math.max(0, Math.floor((base64.length * 3) / 4) - padding);
+}
+
+function logVisionRequestSettings({ imageUrl, detail, fallbackTriggered }) {
+  if (!isAnalyzeDebugEnabled()) return;
+
+  console.info("analyze:openai_vision_request_settings", {
+    model: VISION_MODEL,
+    detail,
+    maxTokens: null,
+    max_output_tokens: null,
+    response_format: null,
+    fallbackTriggered,
+    promptCharacterCount: INPUT_TEXT.length,
+    imageByteSize: getDataUrlByteSize(imageUrl),
+  });
+}
 
 async function requestVision(openai, imageUrl, detail) {
+  logVisionRequestSettings({
+    imageUrl,
+    detail,
+    fallbackTriggered: detail === "high",
+  });
+
   return openai.responses.create({
-    model: "gpt-5-mini",
+    model: VISION_MODEL,
     input: [
       {
         role: "user",

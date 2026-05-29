@@ -81,6 +81,9 @@ function getUploadedFile(files) {
 function buildVisionGuess(parsed) {
   return {
     card: parsed.card,
+    cardName: parsed.cardName,
+    displayName: parsed.displayName,
+    oracleName: parsed.oracleName,
     game: parsed.game,
     set: parsed.set,
     number: parsed.number,
@@ -88,9 +91,11 @@ function buildVisionGuess(parsed) {
     romanizedName: parsed.romanizedName,
     englishNameGuess: parsed.englishNameGuess,
     englishNameConfidence: parsed.englishNameConfidence,
+    cardNumber: parsed.cardNumber,
     collectorNumber: parsed.collectorNumber,
     cardID: parsed.cardID,
     printedTotal: parsed.printedTotal,
+    printed_total: parsed.printed_total,
     setCode: parsed.setCode,
     setName: parsed.setName,
     language: parsed.language,
