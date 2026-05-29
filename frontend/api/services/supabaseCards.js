@@ -34,7 +34,7 @@ const CARD_SELECT_FIELDS = [
   "price_variant",
   "price_updated_at",
 ].join(",");
-const UNDEFINED_RPC_FUNCTION_CODES = new Set(["42883", "PGRST202"]);
+const RPC_FALLBACK_ERROR_CODES = new Set(["42703", "42883", "PGRST202"]);
 const LOOKUP_STAGE_STRENGTH = {
   "exact external_id": 5,
   "exact game + set_id + number": 4,
@@ -460,7 +460,7 @@ async function findExactNameMatches({ supabase, gameKey, names, cardData, matchC
       usedFallback: false,
     };
   } catch (error) {
-    if (!UNDEFINED_RPC_FUNCTION_CODES.has(error.code)) {
+    if (!RPC_FALLBACK_ERROR_CODES.has(error.code)) {
       throw error;
     }
 
