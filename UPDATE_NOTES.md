@@ -62,7 +62,7 @@ Tonight was a major data-pipeline pass.
 - Improved local/Supabase-first card matching so scan-time behavior is less dependent on third-party live lookups.
 - Improved matching around card name, card number, printed total, and set identity.
 
-## Earlier MVP Foundation
+## 2026-05-20
 
 - Built AI-powered card scanning from uploaded images.
 - Added mobile camera/gallery upload and desktop upload flows.

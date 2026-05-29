@@ -4,11 +4,24 @@ import {
   parseJsonResponse,
 } from "../utils/normalizeCard.js";
 
-const INPUT_TEXT = `Extract visible trading-card lookup facts only.
-Return JSON only. Use null when unreadable.
-Do not infer market price, condition, external_id, set_id, database id, or provider id.
+const INPUT_TEXT = `Extract only visible trading card lookup facts.
+
+Return JSON only.
+
+Do not infer, estimate, guess, or generate:
+
+* market price
+* condition
+* external_id
+* set_id
+* database id
+* provider id
+* setName
+
+Use null when unreadable.
 
 Return exactly:
+
 {
 "game": "Pokemon" | "Magic: The Gathering" | "One Piece" | "Unknown",
 "cardName": string | null,
@@ -22,14 +35,87 @@ Return exactly:
 "confidence": number
 }
 
-If japanese text is visible but not readable, return null for cardName and include "Japanese" for language.
-If korean text is visible but not readable, return null for cardName and include "Korean" for language.
-Romanize non-English text if the script is clearly readable but the language is not English, and include the detected language. For example, if you see clear Japanese text that you can romanize but cannot confidently translate to English, return the romanized text as cardName and "Japanese" as language. Do not return a romanized name if the script is not clearly readable.
-Translate names to English when possible, but do not infer or guess names. For example, if a Pokemon card is in Japanese and you can only read the set code and card number, return those and null for cardName, rather than inferring an English name. If you can read a name but it's in a non-English script, return the name as-is and include the language.
-Pokemon: cardName + cardNumber are best. Use printed_total only when visible, such as 161/131.
-MTG: displayName is the large title line at the top. cardName should equal displayName. oracleName is only a smaller alternate/reskin/oracle subtitle when it is clearly a second card identity, not rules text, type line, flavor text, or any readable line under the title. MTG may have setCode and cardNumber but no printed_total.
-One Piece: printed IDs like OP01-016 or ST10-003 should go in cardNumber. Include rarity only if visibly inferable.
-Do not ask for or infer full setName.`;
+General rules:
+
+* Extract only facts visibly printed on the card.
+* Prefer exact transcription over interpretation.
+* Use null when unreadable.
+* Do not infer missing values from game knowledge.
+* Confidence should reflect readability of extracted fields, not confidence in card identification.
+* Focus on reading the card's identifying information, not rules text.
+
+Language:
+
+* If Japanese text is visible but unreadable:
+
+  * cardName = null
+  * language = "Japanese"
+
+* If Korean text is visible but unreadable:
+
+  * cardName = null
+  * language = "Korean"
+
+* If non-English text is clearly readable:
+
+  * return the visible name exactly as printed
+  * include the detected language
+
+* Do not invent English translations.
+
+* Do not guess names from set codes or card numbers.
+
+* Romanize only when the text is clearly readable.
+
+Pokemon:
+
+* Prioritize reading cardName from the top title area.
+* Prioritize reading cardNumber from the bottom border.
+* printed_total is the denominator when visible.
+* Example:
+
+  * 161/131
+  * cardNumber = "161"
+  * printed_total = 131
+* cardName and cardNumber are the highest priority fields.
+* Do not infer set names.
+
+Magic: The Gathering:
+
+* Prioritize reading the large title line at the top.
+* displayName is the large title line.
+* cardName should equal displayName.
+* Do not replace cardName with smaller text beneath the title.
+* oracleName is only a second clearly printed card identity or subtitle.
+* oracleName must not be:
+
+  * rules text
+  * type line
+  * flavor text
+  * artist text
+  * collector information
+  * any readable line beneath the title that is not a second card identity
+* cardNumber and setCode are usually in the bottom border.
+* MTG may have:
+
+  * setCode
+  * cardNumber
+* MTG does not use printed_total.
+
+One Piece:
+
+* Prioritize reading the printed card ID in the bottom-right border.
+* Examples:
+
+  * OP01-016
+  * ST10-003
+  * EB01-012
+* cardNumber is the highest priority field.
+* cardName is secondary.
+* rarity should only be returned when clearly visible.
+* Do not infer variants.
+* Do not infer set names.
+* Do not infer rarity from set codes or card numbers.`;
 
 const VISION_MODEL = "gpt-5-mini";
 
