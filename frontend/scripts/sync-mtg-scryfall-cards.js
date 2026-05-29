@@ -56,7 +56,6 @@ function getBestPrice(card) {
   if (!entry) {
     return {
       price_usd: null,
-      price_source: null,
       price_variant: null,
       price_updated_at: null,
     };
@@ -64,7 +63,6 @@ function getBestPrice(card) {
 
   return {
     price_usd: Number(entry[1]),
-    price_source: "scryfall",
     price_variant: entry[0],
     price_updated_at: new Date().toISOString().slice(0, 10),
   };
@@ -84,8 +82,6 @@ function normalizeCard(card) {
     rarity: card.rarity || null,
     image_url: getScryfallImageUrl(card),
     ...priceData,
-    source: "scryfall",
-    raw: card,
     updated_at: new Date().toISOString(),
   };
 }
@@ -99,7 +95,6 @@ function getRowSignature(row) {
     rarity: row.rarity,
     image_url: row.image_url,
     price_usd: row.price_usd,
-    price_source: row.price_source,
     price_variant: row.price_variant,
   });
 }
@@ -157,8 +152,9 @@ async function loadExistingMtgSignatures() {
     const to = from + existingPageSize - 1;
     const { data, error } = await supabase
       .from("cards")
-      .select("external_id,name,set_name,set_id,number,rarity,image_url,price_usd,price_source,price_variant,price_updated_at")
+      .select("external_id,name,set_name,set_id,number,rarity,image_url,price_usd,price_variant,price_updated_at")
       .eq("game", "mtg")
+      .order("number", { ascending: true })
       .range(from, to);
 
     if (error) throw error;
@@ -245,7 +241,7 @@ async function parseBulkCards(filePath, onCard) {
 async function printSyncSummary() {
   const { count, error } = await supabase
     .from("cards")
-    .select("*", { count: "exact", head: true })
+    .select("id", { count: "exact", head: true })
     .eq("game", "mtg");
 
   if (error) {
@@ -257,7 +253,7 @@ async function printSyncSummary() {
     .from("cards")
     .select("external_id,name,set_name,number,rarity,price_usd,price_variant")
     .eq("game", "mtg")
-    .order("updated_at", { ascending: false })
+    .order("number", { ascending: true })
     .limit(5);
 
   console.info(`Supabase now has ${count} MTG cards.`);

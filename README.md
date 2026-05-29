@@ -62,8 +62,6 @@
   - Printed total
   - Rarity
   - Image URL
-  - Source
-  - Raw source payload
 - Unique `external_id` support for card upserts.
 
 ## Current Platform

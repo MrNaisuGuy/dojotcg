@@ -26,7 +26,6 @@ const syncProvider = process.env.ONEPIECE_SYNC_PROVIDER || "official";
 const sourceFiles = splitList(process.env.ONEPIECE_SYNC_SOURCE_FILE || process.env.ONEPIECE_SYNC_SOURCE_FILES);
 const sourceUrls = splitList(process.env.ONEPIECE_SYNC_SOURCE_URL || process.env.ONEPIECE_SYNC_SOURCE_URLS);
 const officialBaseUrl = "https://en.onepiece-cardgame.com/cardlist/";
-const officialSourceName = "official-bandai-cardlist";
 
 const sourceGroups = [
   {
@@ -381,20 +380,9 @@ function getPriceData(card) {
 
   return {
     price_usd: marketPrice ?? inventoryPrice,
-    price_source: marketPrice !== null || inventoryPrice !== null ? getSourceName(card, "optcgapi") : null,
     price_variant: null,
     price_updated_at: new Date().toISOString().slice(0, 10),
   };
-}
-
-function getSourceName(card, category) {
-  if (card?.source_name) return card.source_name;
-  if (card?.source) return card.source;
-  if (card?.source_url && String(card.source_url).includes("onepiece-cardgame.com")) return officialSourceName;
-  if (category === "official") return officialSourceName;
-  if (category === "import") return "onepiece-import";
-
-  return "optcgapi.com";
 }
 
 function getImageUrl(card) {
@@ -466,12 +454,6 @@ function normalizeCard(card, category) {
     rarity: getFirstValue(card, ["rarity", "card_rarity", "cardRarity"]),
     image_url: getImageUrl(card),
     ...priceData,
-    source: getSourceName(card, category),
-    raw: {
-      ...card,
-      optcg_source_category: category,
-      optcg_card_id: cardId,
-    },
     updated_at: new Date().toISOString(),
   };
 }
@@ -705,7 +687,7 @@ async function printSyncSummary() {
 
   const { count, error } = await supabase
     .from("cards")
-    .select("*", { count: "exact", head: true })
+    .select("id", { count: "exact", head: true })
     .eq("game", "onepiece");
 
   if (error) {
@@ -717,7 +699,7 @@ async function printSyncSummary() {
     .from("cards")
     .select("external_id,name,set_name,number,rarity,price_usd,price_variant")
     .eq("game", "onepiece")
-    .order("updated_at", { ascending: false })
+    .order("number", { ascending: true })
     .limit(5);
 
   console.info(`Supabase now has ${count} One Piece cards.`);

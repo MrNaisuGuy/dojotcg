@@ -31,7 +31,6 @@ const CARD_SELECT_FIELDS = [
   "rarity",
   "image_url",
   "price_usd",
-  "price_source",
   "price_variant",
   "price_updated_at",
 ].join(",");
@@ -40,7 +39,7 @@ const LOOKUP_STAGE_STRENGTH = {
   "exact external_id": 5,
   "exact game + set_id + number": 4,
   "exact game + number": 3,
-  "exact lower(name)": 2,
+  "exact name": 2,
   "number prefix fallback": 1,
   "fuzzy name fallback": 0,
 };
@@ -276,7 +275,6 @@ function formatSupabaseCardMatch(card, cardData, matchContext, lookupStage) {
       basePrice: lowestPrice,
       characterModifier: 1,
     },
-    priceSource: card.price_source,
     priceVariant: card.price_variant,
     priceUpdatedAt: card.price_updated_at,
     imageUrl: card.image_url || FALLBACK_CARD_IMAGE,
@@ -417,9 +415,9 @@ function getNameLookupValues(cardData) {
   return uniqueValues([...exactNames, ...normalizedNames]);
 }
 
-function getLowerNameLookupValues(names) {
+function getExactNameLookupValues(names) {
   return uniqueValues(names
-    .map((name) => String(name || "").toLowerCase().trim())
+    .map((name) => String(name || "").trim())
     .filter(Boolean));
 }
 
@@ -439,26 +437,26 @@ function getFuzzyNamePatterns(names) {
   }));
 }
 
-async function findExactLowerNameMatches({ supabase, gameKey, names, cardData, matchContext }) {
-  const lowerNames = getLowerNameLookupValues(names);
+async function findExactNameMatches({ supabase, gameKey, names, cardData, matchContext }) {
+  const exactNames = getExactNameLookupValues(names);
 
-  if (lowerNames.length === 0) return { candidates: [], usedFallback: false };
+  if (exactNames.length === 0) return { candidates: [], usedFallback: false };
 
   try {
     const { data, error } = await supabase.rpc("lookup_cards_by_lower_name", {
       p_game: gameKey,
-      p_names: lowerNames,
+      p_names: exactNames,
       p_limit: 8,
     });
 
     if (error) throw error;
 
-    const formatted = formatMatches(data || [], cardData, matchContext, 3, "exact lower(name)");
+    const formatted = formatMatches(data || [], cardData, matchContext, 3, "exact name");
 
     return {
       candidates: formatted.candidates,
       dedupeDebug: formatted.dedupeDebug,
-      searchQuery: `exact name game=${gameKey} | lower(name) in (${lowerNames.join(", ")})`,
+      searchQuery: `exact name game=${gameKey} | name ilike any (${exactNames.join(", ")})`,
       usedFallback: false,
     };
   } catch (error) {
@@ -466,22 +464,28 @@ async function findExactLowerNameMatches({ supabase, gameKey, names, cardData, m
       throw error;
     }
 
-    // The RPC is what lets Postgres use the lower(name) expression index from
-    // Supabase/PostgREST. Keep a compatibility fallback for environments where
-    // the SQL helper has not been deployed yet.
-    const exactNameQuery = applyKnownGameFilter(createSupabaseCardQuery(supabase), gameKey)
-      .in("name", names)
-      .limit(8);
+    // Keep a compatibility fallback for environments where the SQL helper has
+    // not been deployed yet.
+    const data = [];
 
-    const { data, error: exactNameError } = await exactNameQuery;
+    for (const exactName of exactNames) {
+      const exactNameQuery = applyKnownGameFilter(createSupabaseCardQuery(supabase), gameKey)
+        .ilike("name", exactName)
+        .limit(8);
 
-    if (exactNameError) throw exactNameError;
-    const formatted = formatMatches(data || [], cardData, matchContext, 3, "exact lower(name)");
+      const { data: exactNameData, error: exactNameError } = await exactNameQuery;
+
+      if (exactNameError) throw exactNameError;
+      data.push(...(exactNameData || []));
+      if (data.length >= 8) break;
+    }
+
+    const formatted = formatMatches(data || [], cardData, matchContext, 3, "exact name");
 
     return {
       candidates: formatted.candidates,
       dedupeDebug: formatted.dedupeDebug,
-      searchQuery: `exact name game=${gameKey} | name in (${names.join(", ")})`,
+      searchQuery: `exact name game=${gameKey} | name ilike (${exactNames.join(", ")})`,
       usedFallback: true,
     };
   }
@@ -581,7 +585,7 @@ export async function findLocalCandidates(cardData, supabase) {
   if (names.length > 0 && gameKey !== "unknown") {
     exactNameAttempted = true;
     startTimer("analyze:supabase_exact_lookup");
-    const exactNameResult = await findExactLowerNameMatches({
+    const exactNameResult = await findExactNameMatches({
       supabase,
       gameKey,
       names,
@@ -670,7 +674,7 @@ export async function findLocalCandidates(cardData, supabase) {
   startTimer("analyze:fallback_lookup");
 
   if (!exactNameAttempted) {
-    const exactNameResult = await findExactLowerNameMatches({
+    const exactNameResult = await findExactNameMatches({
       supabase,
       gameKey,
       names,

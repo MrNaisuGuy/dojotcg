@@ -16,13 +16,8 @@ function pokemonCandidate(overrides) {
     name: "Test Card",
     lowestPrice: 100,
     rarity: "Common",
-    raw: {
-      set: {
-        name: "Test Set",
-        releaseDate: "2024/01/01",
-      },
-      subtypes: [],
-    },
+    set: "Test Set",
+    releaseDate: "2024/01/01",
     ...overrides,
   };
 }
@@ -31,13 +26,8 @@ test("Pokemon Japanese alt art uses the alt-art JP multiplier", () => {
   const candidate = pokemonCandidate({
     name: "Umbreon VMAX",
     rarity: "Special Illustration Rare",
-    raw: {
-      set: {
-        name: "Evolving Skies",
-        releaseDate: "2021/08/27",
-      },
-      subtypes: ["VMAX"],
-    },
+    set: "Evolving Skies",
+    releaseDate: "2021/08/27",
   });
 
   assert.equal(getPokemonPriceTier(candidate), "altArt");
@@ -64,14 +54,9 @@ test("Pokemon Japanese trainer/waifu card uses the trainer-waifu JP multiplier",
   const candidate = pokemonCandidate({
     name: "Lillie",
     rarity: "Ultra Rare",
-    raw: {
-      supertype: "Trainer",
-      subtypes: ["Supporter"],
-      set: {
-        name: "Ultra Prism",
-        releaseDate: "2018/02/02",
-      },
-    },
+    cardType: "Trainer Supporter",
+    set: "Ultra Prism",
+    releaseDate: "2018/02/02",
   });
 
   assert.equal(getPokemonPriceTier(candidate), "trainerWaifu");
@@ -82,13 +67,8 @@ test("Pokemon Korean vintage card uses the vintage Korean liquidity multiplier",
   const prices = estimateRegionalPrices(pokemonCandidate({
     name: "Charizard",
     rarity: "Rare Holo",
-    raw: {
-      set: {
-        name: "Base Set",
-        releaseDate: "1999/01/09",
-      },
-      subtypes: ["Stage 2"],
-    },
+    set: "Base Set",
+    releaseDate: "1999/01/09",
   }));
 
   assert.equal(prices.priceTier, "vintage");
@@ -102,9 +82,7 @@ test("One Piece manga rare JP/KR uses manga and Korean-from-Japanese multipliers
     name: "Monkey.D.Luffy",
     lowestPrice: 100,
     rarity: "Manga SEC",
-    raw: {
-      card_type: "Character",
-    },
+    cardType: "Character",
   });
 
   assert.equal(prices.priceTier, "manga");
@@ -120,9 +98,7 @@ test("One Piece normal SR JP/KR uses SR rarity and normal character demand", () 
     name: "Borsalino",
     lowestPrice: 20,
     rarity: "SR",
-    raw: {
-      card_type: "Character",
-    },
+    cardType: "Character",
   });
 
   assert.equal(prices.priceTier, "sr");
@@ -138,11 +114,8 @@ test("MTG Japanese playable foil uses the foil-playable premium", () => {
     lowestPrice: 80,
     rarity: "Rare",
     priceVariant: "foil",
-    raw: {
-      oracle_text: "Legacy Vintage playable staple",
-      finishes: ["foil"],
-      released_at: "2022-09-09",
-    },
+    cardType: "Legacy Vintage playable staple",
+    releasedAt: "2022-09-09",
   });
 
   assert.equal(prices.priceTier, "foilPlayable");
@@ -157,10 +130,8 @@ test("MTG Korean old/scarce card uses the old rare/scarce premium", () => {
     name: "Gaea's Cradle",
     lowestPrice: 500,
     rarity: "Rare",
-    raw: {
-      oracle_text: "Reserved List scarce old border",
-      released_at: "1998-10-12",
-    },
+    cardType: "Reserved List scarce old border",
+    releasedAt: "1998-10-12",
   });
 
   assert.equal(prices.priceTier, "oldRareOrScarce");

@@ -25,8 +25,7 @@ Tonight was a major data-pipeline pass.
 - Confirmed `cards.number` is the right normalized field for One Piece printed IDs such as `OP02-010`.
 - Kept `external_id` variant-safe instead of collapsing it to the printed card number.
 - Added official Bandai One Piece card sync as the primary One Piece catalog source.
-- Set One Piece Bandai-sourced rows to `source = official-bandai-cardlist`.
-- Added a one-time backfill script for existing One Piece rows whose `raw.source_url` points to `onepiece-cardgame.com`.
+- Added a one-time backfill script for existing One Piece rows whose raw payload pointed to `onepiece-cardgame.com`.
 - Added weekly GitHub Actions workflow for official Bandai One Piece catalog sync.
 - Confirmed OPTCG API connectivity works from GitHub Actions even though it times out from the Codespace runtime.
 - Added OPTCG enrichment sync for One Piece images and prices using `cards.number`.

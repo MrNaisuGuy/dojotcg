@@ -39,7 +39,6 @@ function getBestPokemonPrice(card) {
   if (!marketEntry) {
     return {
       price_usd: null,
-      price_source: null,
       price_variant: null,
       price_updated_at: null,
     };
@@ -49,7 +48,6 @@ function getBestPokemonPrice(card) {
 
   return {
     price_usd: price.market ?? price.mid ?? price.low ?? null,
-    price_source: "tcgplayer",
     price_variant: variant,
     price_updated_at: card.tcgplayer?.updatedAt || null,
   };
@@ -69,8 +67,6 @@ function normalizeCard(card) {
     rarity: card.rarity || null,
     image_url: card.images?.large || card.images?.small || null,
     ...priceData,
-    source: "pokemontcg.io",
-    raw: card,
     updated_at: new Date().toISOString(),
   };
 }
@@ -123,7 +119,7 @@ async function upsertCards(cards) {
 async function printSyncSummary() {
   const { count, error } = await supabase
     .from("cards")
-    .select("*", { count: "exact", head: true })
+    .select("id", { count: "exact", head: true })
     .eq("game", "pokemon");
 
   if (error) {
@@ -135,7 +131,7 @@ async function printSyncSummary() {
     .from("cards")
     .select("external_id,name,set_name,number,printed_total,price_usd,price_variant")
     .eq("game", "pokemon")
-    .order("created_at", { ascending: false })
+    .order("number", { ascending: true })
     .limit(3);
 
   console.info(`Supabase now has ${count} Pokemon cards.`);

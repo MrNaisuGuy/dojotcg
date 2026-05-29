@@ -1,22 +1,10 @@
 create extension if not exists pg_trgm;
 
-create index if not exists cards_game_idx
-on public.cards (game);
-
 create index if not exists cards_game_number_idx
 on public.cards (game, number);
 
 create index if not exists cards_game_set_id_number_idx
 on public.cards (game, set_id, number);
-
-create index if not exists cards_game_external_id_idx
-on public.cards (game, external_id);
-
-create index if not exists cards_lower_name_idx
-on public.cards (lower(name));
-
-create index if not exists cards_game_lower_name_idx
-on public.cards (game, lower(name));
 
 create index if not exists cards_name_trgm_idx
 on public.cards
@@ -39,7 +27,6 @@ returns table (
   rarity text,
   image_url text,
   price_usd numeric,
-  price_source text,
   price_variant text,
   price_updated_at text
 )
@@ -58,11 +45,10 @@ as $$
     c.rarity,
     c.image_url,
     c.price_usd,
-    c.price_source,
     c.price_variant,
     c.price_updated_at::text
   from public.cards c
   where c.game = p_game
-    and lower(c.name) = any (p_names)
+    and c.name ilike any (p_names)
   limit p_limit;
 $$;

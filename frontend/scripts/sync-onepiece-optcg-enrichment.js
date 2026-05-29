@@ -160,14 +160,13 @@ function getPriceData(card) {
 
   return {
     price_usd: price,
-    price_source: price === null ? null : "optcgapi.com",
     price_variant: marketPrice !== null ? "market" : inventoryPrice !== null ? "inventory" : null,
     price_updated_at: price === null ? null : new Date().toISOString().slice(0, 10),
   };
 }
 
 function getOptcgUpdatedAt(row) {
-  const value = row.raw?.optcg?.updated_at;
+  const value = row.price_updated_at || row.updated_at;
   const time = value ? new Date(value).getTime() : NaN;
 
   return Number.isFinite(time) ? time : null;
@@ -180,33 +179,6 @@ function shouldSkipRecent(row) {
   if (!updatedAt) return false;
 
   return Date.now() - updatedAt < skipRecentDays * 24 * 60 * 60 * 1000;
-}
-
-function mergeRaw(existingRaw, optcgCard, endpointType) {
-  const raw = existingRaw && typeof existingRaw === "object" && !Array.isArray(existingRaw)
-    ? existingRaw
-    : {};
-
-  if (raw.optcg) {
-    return {
-      ...raw,
-      optcg: {
-        ...raw.optcg,
-        endpoint_type: endpointType,
-        card: optcgCard,
-        updated_at: new Date().toISOString(),
-      },
-    };
-  }
-
-  return {
-    bandai: raw,
-    optcg: {
-      endpoint_type: endpointType,
-      card: optcgCard,
-      updated_at: new Date().toISOString(),
-    },
-  };
 }
 
 function getOptcgEndpoints(cardId) {
@@ -304,7 +276,7 @@ async function fetchOnePieceCards() {
     const { data } = await runSupabaseQuery(
       () => supabase
         .from("cards")
-        .select("id,external_id,game,name,number,image_url,price_usd,price_source,price_variant,price_updated_at,raw")
+        .select("id,external_id,game,name,number,image_url,price_usd,price_variant,price_updated_at,updated_at")
         .eq("game", "onepiece")
         .not("number", "is", null)
         .order("number", { ascending: true })
@@ -332,18 +304,16 @@ async function updateRows(rows, enrichmentByCardId) {
 
     if (!enrichment) continue;
 
-    const { card, endpointType } = enrichment;
+    const { card } = enrichment;
     const imageUrl = getImageUrl(card);
     const priceData = getPriceData(card);
     const update = {
       image_url: imageUrl || row.image_url,
-      raw: mergeRaw(row.raw, card, endpointType),
       updated_at: new Date().toISOString(),
     };
 
     if (priceData.price_usd !== null) {
       update.price_usd = priceData.price_usd;
-      update.price_source = priceData.price_source;
       update.price_variant = priceData.price_variant;
       update.price_updated_at = priceData.price_updated_at;
     }

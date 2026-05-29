@@ -11,8 +11,7 @@
     "sync:mtg": "node scripts/sync-mtg-scryfall-cards.js",
     "sync:pokemon": "node scripts/sync-pokemon-cards.js",
     "sync:onepiece": "node scripts/sync-onepiece-cards.js",
-    "sync:onepiece-optcg": "node scripts/sync-onepiece-optcg-enrichment.js",
-    "backfill:onepiece-source": "node scripts/backfill-onepiece-source.js"
+    "sync:onepiece-optcg": "node scripts/sync-onepiece-optcg-enrichment.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.2",

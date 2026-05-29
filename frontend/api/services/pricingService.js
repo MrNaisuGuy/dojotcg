@@ -102,16 +102,6 @@ function getCandidateSearchText(candidate) {
     candidate.rarity,
     candidate.cardType,
     candidate.priceVariant,
-    candidate.raw?.rarity,
-    candidate.raw?.set?.name,
-    candidate.raw?.set_name,
-    candidate.raw?.card_type,
-    candidate.raw?.type,
-    candidate.raw?.supertype,
-    candidate.raw?.oracle_text,
-    candidate.raw?.promo_types?.join?.(" "),
-    candidate.raw?.finishes?.join?.(" "),
-    ...(Array.isArray(candidate.raw?.subtypes) ? candidate.raw.subtypes : []),
   ]
     .filter(Boolean)
     .join(" ");
@@ -142,20 +132,17 @@ function getPokemonSearchText(candidate) {
     candidate.name,
     candidate.set,
     candidate.rarity,
+    candidate.cardType,
     candidate.priceVariant,
-    candidate.raw?.rarity,
-    candidate.raw?.set?.name,
-    candidate.raw?.supertype,
-    ...(Array.isArray(candidate.raw?.subtypes) ? candidate.raw.subtypes : []),
   ]
     .filter(Boolean)
     .join(" ");
 }
 
 function getPokemonReleaseYear(candidate) {
-  const releaseDate = candidate.raw?.set?.releaseDate || candidate.raw?.releaseDate;
+  const releaseDate = candidate.releaseDate;
   const releaseYear = releaseDate ? Number(String(releaseDate).slice(0, 4)) : null;
-  const copyrightYear = Number(candidate.raw?.copyrightYear || candidate.copyrightYear);
+  const copyrightYear = Number(candidate.copyrightYear);
 
   return Number.isFinite(releaseYear) ? releaseYear : Number.isFinite(copyrightYear) ? copyrightYear : null;
 }
@@ -307,15 +294,11 @@ function estimateOnePieceRegionalPrices(candidate) {
     ["price_jp"],
     ["japanesePrice"],
     ["regionalMarketPrices", "jp"],
-    ["raw", "regionalPrices", "jp"],
-    ["raw", "prices", "jp"],
   ]);
   const exactKoreanPrice = getExactRegionalPrice(candidate, [
     ["price_kr"],
     ["koreanPrice"],
     ["regionalMarketPrices", "kr"],
-    ["raw", "regionalPrices", "kr"],
-    ["raw", "prices", "kr"],
   ]);
   const jpEstimate = exactJapanesePrice ?? calculatedJpEstimate;
   const krEstimate = exactKoreanPrice ?? calculatedKrEstimate;
@@ -345,7 +328,7 @@ function estimateOnePieceRegionalPrices(candidate) {
 }
 
 function getMtgReleaseYear(candidate) {
-  const releaseDate = candidate.raw?.released_at || candidate.raw?.set?.releaseDate || candidate.raw?.releaseDate;
+  const releaseDate = candidate.releaseDate || candidate.releasedAt;
   const releaseYear = releaseDate ? Number(String(releaseDate).slice(0, 4)) : null;
 
   return Number.isFinite(releaseYear) ? releaseYear : null;
@@ -398,15 +381,11 @@ function estimateMtgRegionalPrices(candidate) {
     ["price_jp"],
     ["japanesePrice"],
     ["regionalMarketPrices", "jp"],
-    ["raw", "prices", "jpy"],
-    ["raw", "regionalPrices", "jp"],
   ]);
   const exactKoreanPrice = getExactRegionalPrice(candidate, [
     ["price_kr"],
     ["koreanPrice"],
     ["regionalMarketPrices", "kr"],
-    ["raw", "prices", "krw"],
-    ["raw", "regionalPrices", "kr"],
   ]);
   const jpEstimate = exactJapanesePrice ?? calculatedJpEstimate;
   const krEstimate = exactKoreanPrice ?? calculatedKrEstimate;

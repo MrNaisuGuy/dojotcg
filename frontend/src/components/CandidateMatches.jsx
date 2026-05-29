@@ -411,12 +411,10 @@ function CandidateCard({ candidate, isBest }) {
             lineHeight: 1.5,
           }}
         >
-          {candidate.priceSource && (
+          {(candidate.priceVariant || candidate.priceUpdatedAt) && (
             <p style={{ margin: "0 0 0.45rem" }}>
-              Price: {candidate.priceSource}
-              {candidate.priceVariant
-                ? ` / ${candidate.priceVariant}`
-                : ""}
+              Price
+              {candidate.priceVariant ? `: ${candidate.priceVariant}` : ""}
               {candidate.priceUpdatedAt
                 ? ` / updated ${candidate.priceUpdatedAt}`
                 : ""}
