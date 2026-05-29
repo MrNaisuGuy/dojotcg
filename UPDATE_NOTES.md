@@ -1,5 +1,20 @@
 # DojoTCG Update Notes
 
+## 2026-05-29
+
+Schema, matching, and sync hardening:
+
+- Removed use of dropped `cards.source`, `cards.price_source`, `cards.created_at`, and `cards.raw` fields across sync scripts, API selects, candidate mapping, and docs.
+- Added SQL migrations to drop `cards.raw` and refresh the `lookup_cards_by_lower_name` RPC so it no longer references removed columns.
+- Replaced broad user-facing match accuracy/confidence presentation with field-level verification for name, number, rarity, and variant.
+- Split raw exact, normalized exact, close/fuzzy, missing, review, and conflict states in candidate scoring.
+- Added stronger raw exact matching before normalization and stronger One Piece external-id suffix matching for variants.
+- Updated candidate cards to show field verification first, with internal ranking score only in expanded details.
+- Updated One Piece OPTCG enrichment to match variants by `cards.number` plus exact `card_image_id` token at the end of the `external_id` slug, preventing base art from overwriting `-p1` or `-r1` variants.
+- Replaced broad `.select("*")` count queries with explicit lightweight selects.
+- Deleted the obsolete One Piece source backfill script and removed its package script.
+- Confirmed tests and production build pass after the schema and matching changes.
+
 ## 2026-05-28
 
 OpenAI prompt tightening based on what Supabase already knows:
@@ -8,7 +23,7 @@ OpenAI prompt tightening based on what Supabase already knows:
 - Removed requests for market price, condition, product ID, database ID, and variant. Those are database/provider facts, so guessing them from an image could create bad matches.
 - Made JSON-only output stricter and smaller. This makes the scanner response easier to parse and avoids wasting time on extra text.
 - Told OpenAI to prefer exact printed identifiers over names. Card numbers, set codes, and One Piece card IDs are usually better lookup keys than a guessed name.
-- Kept confidence scores focused on visual readability. A score now means "how clearly the image showed this," not "how sure the database match is."
+- Kept model extraction scores focused on visual readability. The database match now reports field-level verification instead of a broad user-facing confidence claim.
 - Added clearer Pokemon handling for Japanese and Korean cards. OpenAI keeps the printed local name and only guesses the English name when it can do that confidently.
 - Tightened One Piece recognition around the bottom-right card ID. The ID like `OP01-001` or `ST10-003` is the strongest key Supabase can use.
 - Tightened MTG recognition around collector number and set code. Those fields are more useful for Scryfall/Supabase matching than rules text.
@@ -53,7 +68,7 @@ Tonight was a major data-pipeline pass.
 - Added mobile camera/gallery upload and desktop upload flows.
 - Added client-side image resizing/compression before analysis.
 - Added OpenAI vision extraction for game, card name, local name, romanized name, English guess, collector number, printed total, set, rarity, foil treatment, card type, visible text, and uncertainty fields.
-- Added confidence-based candidate matching and match reason display.
+- Added candidate matching and match reason display.
 - Added raw scan result display for debugging.
 - Added TCG rules/resources pages for Pokemon, Magic: The Gathering, and One Piece.
 - Added turn format and player layout reference pages.

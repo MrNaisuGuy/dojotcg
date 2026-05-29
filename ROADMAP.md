@@ -22,7 +22,7 @@ Current priority remains:
 
 1. Reliable card recognition
 2. Metadata normalization
-3. Exact-match confidence
+3. Field-level match verification
 4. Stable pricing integration
 5. Clean scalable architecture
 
@@ -33,12 +33,12 @@ Existing core features:
 - [x] AI-powered card scanning
 - [x] OCR text extraction
 - [x] Fuzzy matching system
-- [x] Confidence-based candidate matching
+- [x] Field-level candidate verification
 - [x] Multi-language support
   - [x] English
   - [x] Japanese
   - [x] Korean
-- [ ] Cross-region pricing concepts
+- [x] Cross-region pricing concepts
 - [x] Mobile-first scan interface
 
 ## Current Data Architecture Direction
@@ -275,8 +275,8 @@ Cross-market intelligence:
 
 - [x] Add repeatable sync jobs for supported games.
   - [x] Pokemon first
-  - [ ] MTG/Scryfall bulk data later
-  - [ ] One Piece catalog sync or curated import later
+  - [x] MTG/Scryfall bulk data later
+  - [x] One Piece catalog sync or curated import later
 - [ ] Track sync runs.
   - [ ] Source
   - [ ] Started/finished timestamps

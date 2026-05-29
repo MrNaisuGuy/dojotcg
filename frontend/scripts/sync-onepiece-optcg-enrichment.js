@@ -110,6 +110,64 @@ function normalizeOnePieceCardId(value) {
   return match ? match[0] : null;
 }
 
+function normalizeImageId(cardImageId) {
+  return String(cardImageId || "")
+    .toLowerCase()
+    .replaceAll("_", "-");
+}
+
+function getExternalSlug(externalId) {
+  return String(externalId || "")
+    .toLowerCase()
+    .split(":")
+    .pop();
+}
+
+function getOptcgCardSetId(card) {
+  return normalizeOnePieceCardId(getFirstValue(card, [
+    "card_set_id",
+    "cardSetId",
+    "card_id",
+    "cardID",
+    "cardId",
+    "number",
+    "card_image_id",
+    "cardImageId",
+  ]));
+}
+
+function getOptcgCardImageId(card) {
+  return getFirstValue(card, [
+    "card_image_id",
+    "cardImageId",
+    "image_id",
+    "imageId",
+    "card_set_id",
+    "cardSetId",
+  ]);
+}
+
+function toOptcgVariantRow(card, endpointType) {
+  return {
+    endpointType,
+    card,
+    card_set_id: getOptcgCardSetId(card),
+    card_image_id: getOptcgCardImageId(card),
+  };
+}
+
+function isVariantMatch(card, optcgRow) {
+  const imageToken = normalizeImageId(optcgRow.card_image_id);
+  const externalSlug = getExternalSlug(card.external_id);
+
+  return (
+    card.game === "onepiece" &&
+    card.number === optcgRow.card_set_id &&
+    Boolean(imageToken) &&
+    externalSlug.endsWith(imageToken)
+  );
+}
+
 function parsePrice(value) {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   const normalized = String(value || "").replace(/[$,]/g, "").trim();
@@ -233,39 +291,25 @@ async function fetchJson(url) {
   }
 }
 
-function pickBestOptcgCard(body, cardId) {
+function extractOptcgVariantRows(body, cardId, endpointType) {
   const cards = Array.isArray(body) ? body : body ? [body] : [];
 
-  return (
-    cards.find((card) => normalizeOnePieceCardId(
-      card.card_set_id ||
-        card.cardSetId ||
-        card.card_id ||
-        card.cardID ||
-        card.cardId ||
-        card.number ||
-        card.card_image_id,
-    ) === cardId && getImageUrl(card)) ||
-    cards.find((card) => getImageUrl(card)) ||
-    cards[0] ||
-    null
-  );
+  return cards
+    .map((card) => toOptcgVariantRow(card, endpointType))
+    .filter((row) => row.card_set_id === cardId && row.card_image_id);
 }
 
-async function fetchOptcgCard(cardId) {
+async function fetchOptcgVariantRows(cardId) {
   for (const endpoint of getOptcgEndpoints(cardId)) {
     const body = await fetchJson(endpoint.url);
-    const card = pickBestOptcgCard(body, cardId);
+    const rows = extractOptcgVariantRows(body, cardId, endpoint.type);
 
-    if (card) {
-      return {
-        endpointType: endpoint.type,
-        card,
-      };
+    if (rows.length > 0) {
+      return rows;
     }
   }
 
-  return null;
+  return [];
 }
 
 async function fetchOnePieceCards() {
@@ -297,12 +341,17 @@ async function fetchOnePieceCards() {
 
 async function updateRows(rows, enrichmentByCardId) {
   let updated = 0;
+  let variantMisses = 0;
 
   for (const row of rows) {
     const cardId = normalizeOnePieceCardId(row.number);
-    const enrichment = enrichmentByCardId.get(cardId);
+    const enrichmentRows = enrichmentByCardId.get(cardId) || [];
+    const enrichment = enrichmentRows.find((optcgRow) => isVariantMatch(row, optcgRow));
 
-    if (!enrichment) continue;
+    if (!enrichment) {
+      if (enrichmentRows.length > 0) variantMisses += 1;
+      continue;
+    }
 
     const { card } = enrichment;
     const imageUrl = getImageUrl(card);
@@ -334,7 +383,10 @@ async function updateRows(rows, enrichmentByCardId) {
     updated += 1;
   }
 
-  return updated;
+  return {
+    updated,
+    variantMisses,
+  };
 }
 
 async function syncOnePieceOptcgEnrichment() {
@@ -357,10 +409,10 @@ async function syncOnePieceOptcgEnrichment() {
 
   for (const [index, cardId] of cardIds.entries()) {
     try {
-      const enrichment = await fetchOptcgCard(cardId);
+      const enrichmentRows = await fetchOptcgVariantRows(cardId);
 
-      if (enrichment) {
-        enrichmentByCardId.set(cardId, enrichment);
+      if (enrichmentRows.length > 0) {
+        enrichmentByCardId.set(cardId, enrichmentRows);
       } else {
         misses += 1;
       }
@@ -389,16 +441,21 @@ async function syncOnePieceOptcgEnrichment() {
   console.info(`Matched ${enrichmentByCardId.size} OPTCG card numbers. Missed ${misses}.`);
 
   if (dryRun) {
-    console.table([...enrichmentByCardId.entries()].slice(0, 10).map(([cardId, enrichment]) => ({
-      number: cardId,
-      endpoint: enrichment.endpointType,
-      image_url: getImageUrl(enrichment.card),
-      price_usd: getPriceData(enrichment.card).price_usd,
-    })));
+    console.table([...enrichmentByCardId.entries()].flatMap(([cardId, enrichmentRows]) =>
+      enrichmentRows.slice(0, 3).map((enrichment) => ({
+        number: cardId,
+        card_image_id: enrichment.card_image_id,
+        token: normalizeImageId(enrichment.card_image_id),
+        endpoint: enrichment.endpointType,
+        image_url: getImageUrl(enrichment.card),
+        price_usd: getPriceData(enrichment.card).price_usd,
+      }))
+    ).slice(0, 10));
   }
 
-  const updated = await updateRows(rows, enrichmentByCardId);
+  const { updated, variantMisses } = await updateRows(rows, enrichmentByCardId);
   console.info(`${dryRun ? "Dry run: would update" : "Updated"} ${updated} One Piece rows.`);
+  console.info(`Skipped ${variantMisses} One Piece rows because no OPTCG variant token matched the external_id slug.`);
 
   if (rateLimited) {
     console.info("Run stopped early because OPTCG throttled requests. Already matched rows were still processed.");

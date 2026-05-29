@@ -26,14 +26,17 @@
   - Copyright year
   - Visible text
   - Uncertain fields
-- Confidence-based candidate matching.
+- Field-level candidate verification instead of user-facing match accuracy claims.
 - Supabase-backed card catalog.
 - Pokemon card sync from PokemonTCG into Supabase.
-- Supabase-first card lookup for Pokemon identity and images.
+- MTG card sync from Scryfall bulk data into Supabase.
+- One Piece card sync from the official Bandai card list.
+- One Piece OPTCG enrichment for variant-specific images and prices.
+- Supabase-first card lookup for card identity, images, and prices.
 - Local card image URLs served from the synced card catalog.
 - Candidate images and prices come from the synced Supabase card catalog.
-- Candidate match display with match score and match reasons.
-- Raw scan result display.
+- Candidate match display with Name, Number, Rarity, and Variant verification.
+- Internal match score and raw scan output are kept in details/debug views.
 
 ## Rules And Reference Features
 
@@ -49,8 +52,11 @@
 ## Data And Sync Features
 
 - Supabase client configured for frontend use.
-- Server-side Supabase service-role sync script.
+- Server-side Supabase service-role sync scripts.
 - `npm run sync:pokemon` command.
+- `npm run sync:mtg` command.
+- `npm run sync:onepiece` command.
+- `npm run sync:onepiece-optcg` command.
 - Limited sync testing with `POKEMON_SYNC_MAX_PAGES`.
 - Card catalog fields include:
   - Game
@@ -62,7 +68,12 @@
   - Printed total
   - Rarity
   - Image URL
+  - Price USD
+  - Price variant
+  - Price updated at
+  - Updated at
 - Unique `external_id` support for card upserts.
+- Lean card schema with removed source/raw payload columns to reduce Supabase storage.
 
 ## Current Platform
 

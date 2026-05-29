@@ -21,11 +21,13 @@ export function buildMatchContext(cardData) {
   return {
     gameKey,
     scannedName: cardData.card || cardData.cardName || cardData.name || null,
+    rawName: normalizeRawText(cardData.card || cardData.cardName || cardData.displayName || cardData.name),
     displayName: cardData.displayName || null,
     oracleName: cardData.oracleName || null,
     lookupNames: getLocalLookupNames(cardData),
     scannedCardId: cardData.cardID || cardData.cardId || cardData.cardNumber || cardData.collectorNumber || cardData.number || null,
     rawExtractedCardNumber: rawCardNumber || null,
+    rawNumber: normalizeRawText(rawCardNumber),
     normalizedCollectorNumber,
     collectorNumberAliases: getCollectorNumberAliases(rawCardNumber, gameKey),
     externalId: normalizeValue(externalId),
@@ -40,10 +42,12 @@ export function buildMatchContext(cardData) {
     printedTotal,
     language: normalizeValue(cardData.language),
     rarity: normalizeValue(cardData.rarity),
+    rawRarity: normalizeRawText(cardData.rarity),
     onePieceCardId: normalizeOnePieceCardId(
       cardData.cardID || cardData.cardId || cardData.cardNumber || cardData.collectorNumber || cardData.number,
     ),
     cardType: normalizeValue(cardData.cardType),
+    rawVariant: normalizeRawText(cardData.foilTreatment || cardData.editionType || cardData.variant),
     treatmentClues: getTreatmentClues(cardData),
     gameConfidence: (cardData.confidenceScores?.game ?? cardData.gameConfidence ?? 50) / 100,
     setConfidence: (cardData.confidenceScores?.set ?? cardData.setConfidence ?? 50) / 100,
@@ -61,7 +65,9 @@ export function buildCandidateMatchData(candidate) {
   return {
     gameKey,
     candidateName: candidate.name || null,
+    rawName: normalizeRawText(candidate.name),
     candidateNumber: candidate.number || null,
+    rawNumber: normalizeRawText(candidate.number),
     normalizedCollectorNumber: normalizeCollectorNumberForGame(candidate.number, gameKey),
     collectorNumberAliases: getCollectorNumberAliases(candidate.number, gameKey),
     externalId: normalizeValue(externalId),
@@ -74,12 +80,18 @@ export function buildCandidateMatchData(candidate) {
     printedTotal: normalizePrintedTotal(candidate.printedTotal) || parsedNumber.printedTotal,
     language: normalizeValue(candidate.language),
     rarity: normalizeValue(candidate.rarity),
+    rawRarity: normalizeRawText(candidate.rarity),
     onePieceCardId: normalizeOnePieceCardId(
       candidate.externalId || candidate.cardID || candidate.cardId || candidate.id || candidate.number,
     ),
     cardType: normalizeValue(candidate.cardType),
+    rawVariant: normalizeRawText(candidate.priceVariant || candidate.variant || candidate.foilTreatment || candidate.editionType),
     treatmentClues: getTreatmentClues(candidate),
   };
+}
+
+function normalizeRawText(value) {
+  return String(value || "").trim();
 }
 
 function hasValue(value) {
@@ -92,6 +104,19 @@ function valuesConflict(left, right) {
 
 function includesEither(left, right) {
   return hasValue(left) && hasValue(right) && (left.includes(right) || right.includes(left));
+}
+
+function rawValuesMatch(left, right) {
+  return hasValue(left) && hasValue(right) && left === right;
+}
+
+function getVerificationStatus({ hasScannedValue, hasCandidateValue, rawExact, normalizedExact, close, conflict }) {
+  if (conflict) return "conflict";
+  if (!hasScannedValue || !hasCandidateValue) return "missing";
+  if (rawExact) return "raw_exact";
+  if (normalizedExact) return "normalized_exact";
+  if (close) return "close";
+  return "review";
 }
 
 function normalizeCollectorNumberForGame(value, gameKey) {
@@ -234,11 +259,13 @@ export function scoreCandidate(matchContext, candidateMatchData) {
       candidateMatchData.normalizedSetCode &&
       candidateMatchData.normalizedSetCode === matchContext.normalizedSetCode
   );
-  const exactNameMatch = Boolean(
+  const rawExactNameMatch = rawValuesMatch(matchContext.rawName, candidateMatchData.rawName);
+  const normalizedExactNameMatch = Boolean(
     matchContext.normalizedName &&
       candidateMatchData.normalizedName &&
       candidateMatchData.normalizedName === matchContext.normalizedName,
   );
+  const exactNameMatch = rawExactNameMatch || normalizedExactNameMatch;
   const fuzzyNameMatch = Boolean(
     !exactNameMatch &&
       includesEither(candidateMatchData.normalizedName, matchContext.normalizedName)
@@ -246,7 +273,7 @@ export function scoreCandidate(matchContext, candidateMatchData) {
   const nameScore = getSimilarity(candidateMatchData.normalizedName, matchContext.normalizedName);
   const displayNameScore = getSimilarity(candidateMatchData.normalizedName, matchContext.normalizedDisplayName);
   const oracleNameScore = getSimilarity(candidateMatchData.normalizedName, matchContext.normalizedOracleName);
-  const bestNameScore = Math.max(nameScore, displayNameScore, oracleNameScore);
+  const bestNameScore = Math.max(rawExactNameMatch ? 1 : 0, normalizedExactNameMatch ? 0.96 : 0, nameScore, displayNameScore, oracleNameScore);
   const alternateNameMatch = Boolean(
     matchContext.gameKey === "mtg" &&
       (displayNameScore >= 0.65 || oracleNameScore >= 0.65)
@@ -254,10 +281,11 @@ export function scoreCandidate(matchContext, candidateMatchData) {
   const collectorAliasMatch = matchContext.collectorNumberAliases.some((alias) =>
     candidateMatchData.collectorNumberAliases.includes(alias)
   );
+  const rawExactNumberMatch = rawValuesMatch(matchContext.rawNumber, candidateMatchData.rawNumber);
   const exactNumberMatch = Boolean(
     matchContext.normalizedNumber &&
       candidateMatchData.normalizedNumber &&
-      collectorAliasMatch,
+      (rawExactNumberMatch || collectorAliasMatch),
   );
   const baseNumberMatch = Boolean(
     !exactNumberMatch &&
@@ -281,11 +309,19 @@ export function scoreCandidate(matchContext, candidateMatchData) {
   );
   const printedTotalScore = printedTotalMatch ? 1 : 0;
   const languageMatch = Boolean(matchContext.language && candidateMatchData.language && matchContext.language === candidateMatchData.language);
-  const rarityMatch = Boolean(matchContext.rarity && candidateMatchData.rarity && matchContext.rarity === candidateMatchData.rarity);
+  const rawExactRarityMatch = rawValuesMatch(matchContext.rawRarity, candidateMatchData.rawRarity);
+  const rarityMatch = Boolean(rawExactRarityMatch || (matchContext.rarity && candidateMatchData.rarity && matchContext.rarity === candidateMatchData.rarity));
   const rarityScore = rarityMatch ? 1 : 0;
   const cardTypeMatch = Boolean(matchContext.cardType && candidateMatchData.cardType && matchContext.cardType === candidateMatchData.cardType);
   const treatmentMatches = matchContext.treatmentClues.filter((clue) => candidateMatchData.treatmentClues.includes(clue));
   const treatmentMatch = treatmentMatches.length > 0;
+  const externalIdSuffixMatch = Boolean(
+    matchContext.gameKey === "onepiece" &&
+      matchContext.onePieceCardId &&
+      candidateMatchData.externalId &&
+      candidateMatchData.externalId.includes(normalizeValue(matchContext.onePieceCardId))
+  );
+  const variantMatch = treatmentMatch || externalIdSuffixMatch || rawValuesMatch(matchContext.rawVariant, candidateMatchData.rawVariant);
   const nameConflict = Boolean(
     matchContext.normalizedName &&
       candidateMatchData.normalizedName &&
@@ -303,7 +339,8 @@ export function scoreCandidate(matchContext, candidateMatchData) {
   if (cardIdMatch) matchedFields.push("printed_card_id");
   if (setIdMatch) matchedFields.push("set_id");
   if (setCodeMatch) matchedFields.push("set_code");
-  if (exactNameMatch) matchedFields.push("name");
+  if (rawExactNameMatch) matchedFields.push("raw_name");
+  if (!rawExactNameMatch && normalizedExactNameMatch) matchedFields.push("normalized_name");
   if (fuzzyNameMatch) matchedFields.push("similar_name");
   if (alternateNameMatch) matchedFields.push("alternate_name");
   if (exactNumberMatch) matchedFields.push("number");
@@ -314,6 +351,7 @@ export function scoreCandidate(matchContext, candidateMatchData) {
   if (rarityMatch) matchedFields.push("rarity");
   if (cardTypeMatch) matchedFields.push("card_type");
   if (treatmentMatch) matchedFields.push("treatment");
+  if (externalIdSuffixMatch) matchedFields.push("external_id_suffix");
 
   if (matchContext.gameKey === "pokemon") {
     if (exactNameMatch) pokemonDebugReasons.push("pokemon name match");
@@ -341,7 +379,7 @@ export function scoreCandidate(matchContext, candidateMatchData) {
   let rejectionReason = null;
   const weightedScore = (() => {
     if (matchContext.gameKey === "pokemon") {
-      return (nameScore * 0.7) + (numberScore * 0.25) + (printedTotalScore * 0.05);
+      return (bestNameScore * 0.7) + (numberScore * 0.25) + (printedTotalScore * 0.05);
     }
 
     if (matchContext.gameKey === "mtg") {
@@ -357,10 +395,10 @@ export function scoreCandidate(matchContext, candidateMatchData) {
     }
 
     if (matchContext.gameKey === "onepiece") {
-      return (nameScore * 0.55) + (numberScore * 0.4) + (rarityScore * 0.05);
+      return (bestNameScore * 0.55) + (numberScore * 0.4) + (rarityScore * 0.05) + (externalIdSuffixMatch ? 0.05 : 0);
     }
 
-    return (nameScore * 0.6) + (numberScore * 0.25) + (setCodeScore * 0.15);
+    return (bestNameScore * 0.6) + (numberScore * 0.25) + (setCodeScore * 0.15);
   })();
 
   if (externalIdMatch) {
@@ -411,6 +449,8 @@ export function scoreCandidate(matchContext, candidateMatchData) {
     [printedTotalMatch && !numberMatch, 0.02, "printed total match"],
     [cardTypeMatch, 0.02, "card type match"],
     [treatmentMatch, 0.02, "treatment match"],
+    [rawExactNameMatch, 0.02, "raw exact name match"],
+    [externalIdSuffixMatch, 0.04, "onepiece external_id suffix match"],
   ];
 
   for (const [applies, delta, reason] of adjustments) {
@@ -494,7 +534,8 @@ export function scoreCandidate(matchContext, candidateMatchData) {
   if (cardIdMatch) reasons.push("printed card id match");
   if (setIdMatch) reasons.push("set id match");
   if (setCodeMatch) reasons.push("set code match");
-  if (exactNameMatch) reasons.push("exact name");
+  if (rawExactNameMatch) reasons.push("raw exact name");
+  if (!rawExactNameMatch && normalizedExactNameMatch) reasons.push("normalized exact name");
   if (fuzzyNameMatch) reasons.push("similar name");
   if (alternateNameMatch) reasons.push("alternate name");
   if (exactNumberMatch) reasons.push("collector number match");
@@ -505,8 +546,48 @@ export function scoreCandidate(matchContext, candidateMatchData) {
   if (rarityMatch) reasons.push("rarity match");
   if (cardTypeMatch) reasons.push("card type match");
   if (treatmentMatch) reasons.push("treatment match");
+  if (externalIdSuffixMatch) reasons.push("external_id suffix match");
 
   const clampedConfidence = Math.min(Math.max(confidence, 0.01), 0.99);
+  const fieldVerification = {
+    name: {
+      label: rawExactNameMatch ? "Exact" : normalizedExactNameMatch ? "Normalized exact" : fuzzyNameMatch || alternateNameMatch ? "Close" : nameConflict ? "Conflict" : "Review",
+      status: getVerificationStatus({
+        hasScannedValue: Boolean(matchContext.rawName || matchContext.normalizedName),
+        hasCandidateValue: Boolean(candidateMatchData.rawName || candidateMatchData.normalizedName),
+        rawExact: rawExactNameMatch,
+        normalizedExact: normalizedExactNameMatch,
+        close: fuzzyNameMatch || alternateNameMatch || bestNameScore >= 0.75,
+        conflict: nameConflict,
+      }),
+    },
+    number: {
+      label: numberMatch ? "Exact" : conflictingFields.includes("number") ? "Conflict" : "Review",
+      status: getVerificationStatus({
+        hasScannedValue: Boolean(matchContext.rawNumber || matchContext.normalizedNumber || matchContext.onePieceCardId),
+        hasCandidateValue: Boolean(candidateMatchData.rawNumber || candidateMatchData.normalizedNumber),
+        rawExact: rawExactNumberMatch,
+        normalizedExact: numberMatch,
+        close: false,
+        conflict: conflictingFields.includes("number"),
+      }),
+    },
+    rarity: {
+      label: rarityMatch ? "Exact" : conflictingFields.includes("rarity") ? "Conflict" : (!matchContext.rarity || !candidateMatchData.rarity) ? "Missing" : "Review",
+      status: getVerificationStatus({
+        hasScannedValue: Boolean(matchContext.rarity),
+        hasCandidateValue: Boolean(candidateMatchData.rarity),
+        rawExact: rawExactRarityMatch,
+        normalizedExact: rarityMatch,
+        close: false,
+        conflict: conflictingFields.includes("rarity"),
+      }),
+    },
+    variant: {
+      label: variantMatch ? "Exact" : (!matchContext.rawVariant && matchContext.treatmentClues.length === 0 && !matchContext.onePieceCardId) ? "Missing" : "Review",
+      status: variantMatch ? "raw_exact" : (!matchContext.rawVariant && matchContext.treatmentClues.length === 0 && !matchContext.onePieceCardId) ? "missing" : "review",
+    },
+  };
   const identityDebug = {
     game: matchContext.gameKey,
     scannedName: matchContext.scannedName,
@@ -524,6 +605,8 @@ export function scoreCandidate(matchContext, candidateMatchData) {
     setCode: matchContext.normalizedSetCode || null,
     rarity: matchContext.rarity || null,
     nameMatch: exactNameMatch || fuzzyNameMatch,
+    rawExactNameMatch,
+    normalizedExactNameMatch,
     numberMatch,
     cardIdMatch,
     trustedSetMatch: setIdMatch,
@@ -540,6 +623,7 @@ export function scoreCandidate(matchContext, candidateMatchData) {
     printedTotalScore: Math.round(printedTotalScore * 1000) / 1000,
     rarityScore: Math.round(rarityScore * 1000) / 1000,
     weightedScore: Math.round(weightedScore * 1000) / 1000,
+    fieldVerification,
     rejectionReason,
   };
 
@@ -555,6 +639,7 @@ export function scoreCandidate(matchContext, candidateMatchData) {
     finalScore: Math.round(clampedConfidence * 1000) / 10,
     pokemonDebugReasons,
     scoreBreakdown,
+    fieldVerification,
     identityDebug,
   };
 }

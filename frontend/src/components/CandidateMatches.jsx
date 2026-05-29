@@ -54,13 +54,25 @@ function getPriceFreshnessText(candidate, regionalPrices) {
   } old`;
 }
 
-function hasMatchReason(candidate, pattern) {
-  return candidate.matchReasons?.some((reason) =>
-    pattern.test(reason)
-  );
+const VERIFICATION_COLORS = {
+  raw_exact: "#22c55e",
+  normalized_exact: "#86efac",
+  close: "#facc15",
+  review: "#a6a6a6",
+  missing: "#a6a6a6",
+  conflict: "#fca5a5",
+};
+
+function getVerification(candidate, field, fallbackLabel = "Review", fallbackStatus = "review") {
+  return candidate.fieldVerification?.[field] || {
+    label: fallbackLabel,
+    status: fallbackStatus,
+  };
 }
 
-function MatchCheck({ label, matched }) {
+function MatchCheck({ label, verification }) {
+  const color = VERIFICATION_COLORS[verification.status] || "#a6a6a6";
+
   return (
     <div
       style={{
@@ -80,11 +92,11 @@ function MatchCheck({ label, matched }) {
 
       <span
         style={{
-          color: matched ? "#22c55e" : "#a6a6a6",
+          color,
           fontWeight: 800,
         }}
       >
-        {matched ? "✓ Exact" : "Review"}
+        {verification.label}
       </span>
     </div>
   );
@@ -147,22 +159,11 @@ function CandidateCard({ candidate, isBest }) {
       ? candidate.matchScore <= 1
         ? candidate.matchScore * 100
         : candidate.matchScore
-      : 0;
-
-  const cardNameMatched = hasMatchReason(
-    candidate,
-    /exact name|similar name/i
-  );
-
-  const numberMatched = hasMatchReason(
-    candidate,
-    /collector number/i
-  );
-
-  const rarityMatched = hasMatchReason(
-    candidate,
-    /rarity/i
-  );
+      : null;
+  const nameVerification = getVerification(candidate, "name");
+  const numberVerification = getVerification(candidate, "number");
+  const rarityVerification = getVerification(candidate, "rarity", candidate.rarity ? "Review" : "Missing", candidate.rarity ? "review" : "missing");
+  const variantVerification = getVerification(candidate, "variant", candidate.priceVariant ? "Review" : "Missing", candidate.priceVariant ? "review" : "missing");
 
   return (
     <article
@@ -227,12 +228,14 @@ function CandidateCard({ candidate, isBest }) {
 
         <div
           style={{
-            color: score >= 90 ? "#22c55e" : "#facc15",
-            fontSize: "1.25rem",
+            color: isBest ? "#22c55e" : "#a6a6a6",
+            fontSize: "0.78rem",
             fontWeight: 900,
+            textTransform: "uppercase",
+            letterSpacing: 0,
           }}
         >
-          {score.toFixed(0)}%
+          {isBest ? "Selected" : "Review"}
         </div>
       </div>
 
@@ -321,18 +324,23 @@ function CandidateCard({ candidate, isBest }) {
 
       <div style={{ marginTop: "0.9rem", textAlign: "left" }}>
         <MatchCheck
-          label="Card Name"
-          matched={cardNameMatched}
+          label="Name"
+          verification={nameVerification}
         />
 
         <MatchCheck
-          label="Collector Number"
-          matched={numberMatched}
+          label="Number"
+          verification={numberVerification}
         />
 
         <MatchCheck
           label="Rarity"
-          matched={rarityMatched}
+          verification={rarityVerification}
+        />
+
+        <MatchCheck
+          label="Variant"
+          verification={variantVerification}
         />
       </div>
 
@@ -434,9 +442,15 @@ function CandidateCard({ candidate, isBest }) {
           )}
 
           {candidate.matchReasons?.length > 0 && (
-            <p style={{ margin: 0 }}>
+            <p style={{ margin: "0 0 0.45rem" }}>
               Matched on:{" "}
               {candidate.matchReasons.join(", ")}
+            </p>
+          )}
+
+          {score !== null && (
+            <p style={{ margin: 0 }}>
+              Internal rank score: {score.toFixed(0)}
             </p>
           )}
         </div>

@@ -20,14 +20,11 @@ function ResultCard({ result }) {
 
       <h1 className="text-3xl font-bold text-gray-100">Raw Scan Results</h1>
       <h2 className="text-xl font-semibold text-gray-200">
-        Card matched with {result.accuracy?.toFixed(1) || result.overallAccuracy?.toFixed(1) || "Unknown"}% accuracy.
+        Extracted visible card fields for database verification.
       </h2>
       <p><strong>Game:</strong> {result.game}</p>
-      <p><strong>Game Confidence:</strong> {result.gameConfidence?.toFixed(1) || "Unknown"}%</p>
       <p><strong>Name:</strong> {result.name || "Unknown"}</p>
-      <p><strong>Name Confidence:</strong> {result.nameConfidence?.toFixed(1) || "Unknown"}%</p>
       <p><strong>Card Number:</strong> {result.cardNumber || result.collectorNumber || "Unknown"}</p>
-      <p><strong>Collector Number Confidence:</strong> {result.collectorNumberConfidence?.toFixed(1) || "Unknown"}%</p>
       <p><strong>Set Code:</strong> {result.setCode || "Unknown"}</p>
       <p><strong>Printed Total:</strong> {result.printedTotal || "Unknown"}</p>
       <p><strong>Language:</strong> {result.language || "Unknown"}</p>
@@ -37,7 +34,6 @@ function ResultCard({ result }) {
       <p><strong>Copyright Year:</strong> {result.copyrightYear || "Unknown"}</p>
       <p><strong>Visible Text:</strong> {result.visibleText.join(", ") || "Unknown"}</p>
       <p><strong>Uncertain Fields:</strong> {result.uncertainFields.join(", ") || "Unknown"}</p>
-      <p><strong>Overall Accuracy:</strong> {result.overallAccuracy?.toFixed(1) || "Unknown"}%</p>
       <p><strong>Card ID:</strong> {result.cardID || "Unknown"}</p>
       <p><strong>Notes:</strong> {result.notes || "None"}</p>
     </div>

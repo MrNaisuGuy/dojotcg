@@ -216,7 +216,9 @@ test("exact game + number + exact normalized name scores high", () => {
 
   assert.equal(match.confidenceReason, "mtg weighted visible-field match");
   assert.ok(match.score >= 85);
-  assert.ok(match.score <= 95);
+  assert.ok(match.score <= 99);
+  assert.equal(match.fieldVerification.name.label, "Exact");
+  assert.equal(match.fieldVerification.number.label, "Exact");
 });
 
 test("exact external_id match scores very high", () => {
@@ -293,8 +295,9 @@ test("One Piece printed card id alone ranks strongly", () => {
   );
 
   assert.equal(match.confidenceReason, "onepiece weighted visible-field match");
-  assert.ok(match.score >= 35);
-  assert.ok(match.score <= 45);
+  assert.ok(match.score >= 45);
+  assert.ok(match.score <= 60);
+  assert.equal(match.fieldVerification.variant.label, "Exact");
 });
 
 test("One Piece printed card id is not capped by generic set conflict", () => {

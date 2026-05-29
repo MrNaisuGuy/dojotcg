@@ -328,6 +328,7 @@ function formatSupabaseCardMatch(card, cardData, matchContext, lookupStage) {
     ...candidate,
     regionalPrices,
     matchScore: match.finalScore,
+    fieldVerification: match.fieldVerification,
     matchReasons: match.reasons,
     ...(isAnalyzeDebugEnabled()
       ? {
